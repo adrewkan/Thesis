@@ -1,0 +1,42 @@
+# Core RAG & LLM framework
+langchain>=0.3.0
+langchain-core>=0.3.0
+langchain-community>=0.3.0
+langchain-openai>=0.2.0
+langchain-huggingface>=0.1.0
+langchain-experimental>=0.0.60
+
+# Local LLM inference
+# Install PyTorch separately with the correct CUDA version for your system:
+#   https://pytorch.org/get-started/locally/
+# e.g. pip install torch --index-url https://download.pytorch.org/whl/cu121
+torch>=2.3.0
+transformers>=4.44.0          # Llama 3.1 support requires >= 4.43
+accelerate>=0.33.0            # required for device_map="auto"
+bitsandbytes>=0.43.0          # 4-bit NF4 quantization
+huggingface_hub>=0.24.0       # model downloads + gated model token auth
+scipy>=1.13.0                 # required by bitsandbytes
+
+# Embeddings
+sentence-transformers>=2.7.0  # all-MiniLM-L6-v2
+
+# Vector Database
+chromadb>=0.4.24
+
+# UI
+streamlit>=1.33.0
+
+# Observability & Evaluation
+langfuse>=2.28.0
+ragas>=0.2.0
+rapidfuzz>=3.0.0
+
+# BM25 keyword retrieval (used by langchain_community BM25Retriever)
+rank_bm25>=0.2.2
+
+# Data & Utilities
+datasets>=2.18.0
+python-dotenv==1.0.1
+jupyter>=1.0.0
+tiktoken>=0.6.0
+pypdf>=4.2.0

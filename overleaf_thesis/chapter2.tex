@@ -1,0 +1,71 @@
+\chapter{Related Work}
+\label{chap2}
+
+\section{Introduction}
+This chapter reviews prior work relevant to building and evaluating a 
+retrieval-augmented generation system for legal contract question answering. 
+It begins with the original RAG formulation and the development of more 
+advanced RAG architectures, then covers the open-weight language models 
+that serve as generators in this thesis. It then examines how RAG has been 
+applied to legal tasks specifically, surveys the datasets and pre-trained 
+models developed for legal contract NLP, and closes with evaluation 
+frameworks designed for generative systems.
+
+\section{Retrieval-Augmented Generation}
+Lewis et al. introduced Retrieval-Augmented Generation in 2020 as a method for knowledge-intensive NLP tasks where the model's parametric memory alone is insufficient \cite{lewis2020rag}. The core idea is straightforward: given a query, retrieve relevant passages from an external document collection and pass them alongside the query to a generative model. This separates what the model knows from training from what it can look up at inference time, which is exactly the property needed when answering questions about specific documents the model has never seen.
+
+Gao et al. survey the development of RAG systems from this original formulation through more recent architectures \cite{gao2024ragsurvey}. They organize the field into three generations: naive RAG, which follows the basic retrieve-then-generate pipeline; advanced RAG, which adds pre- and post-retrieval steps such as query rewriting and re-ranking; and modular RAG, where components can be swapped or combined freely. The main problems identified across all three are hallucination when retrieval fails, sensitivity to the quality of retrieved passages, and the difficulty of evaluating open-ended generated text. This thesis follows the advanced RAG paradigm, using hybrid retrieval and query reformulation rather than a basic single-step retrieve-then-generate approach.
+
+\section{Fine-Tuning vs Retrieval-Augmented Generation}
+An alternative to RAG for adapting a language model to a specific domain is fine-tuning: updating the model's weights on a labeled dataset drawn from that domain. Fine-tuning can improve performance on well-defined tasks where sufficient training data exists, but it has practical drawbacks that make it a poor fit for document-level question answering over a corpus that changes over time.
+
+Training data for fine-tuning must be collected and labeled in advance. For legal contract QA this means producing question-answer pairs across hundreds of contracts, each requiring legal expertise 
+to verify. The computational cost of fine-tuning a 7B parameter model is also substantial, and the process must be repeated whenever new contracts are added to the corpus or existing ones are revised. Knowledge acquired through fine-tuning is encoded statically in the model weights, so a contract added after training is invisible to the model just as it would be to an unmodified base model.
+
+RAG sidesteps these requirements. The language model's weights are never modified; instead, the retrieval index is updated by embedding and storing the new document. At inference time the model receives the relevant contract text directly in its input and reasons over it without needing to have seen it during training. Ovadia et al. compare the two approaches across knowledge-intensive tasks and find that RAG consistently outperforms unsupervised fine-tuning, both for incorporating new information and for reinforcing knowledge the model already has \cite{ovadia2023finetuning}. For a system that must answer questions about a fixed but large and heterogeneous collection of contracts, RAG is the more practical choice.
+
+\section{Large Language Models in Domain-Specific Tasks}
+Recent years have seen a shift toward open-weight language models that 
+researchers can run locally, without dependence on closed-source APIs. 
+Two families are directly relevant to this thesis: Llama and Mistral.
+
+Meta released Llama~2 in 2023 as a series of decoder-only models at 7B, 
+13B, and 70B parameters, with instruction-tuned variants trained via 
+reinforcement learning from human feedback \cite{touvron2023llama2}. 
+Llama~3.1 \cite{meta2024llama3} extended the family with a 128K token 
+context window, which matters for legal contracts where relevant clauses 
+can be separated by many pages of unrelated text.
+
+Jiang et al. released Mistral 7B the same year \cite{jiang2023mistral}. 
+Despite having fewer parameters than Llama~2~13B, it matched or exceeded 
+it on standard benchmarks. Both models have been adopted across 
+domain-specific NLP work as accessible alternatives to closed-source 
+systems; several of the legal RAG pipelines surveyed by Hindi et al. use 
+Llama or Mistral variants as their generative backbone 
+\cite{hindi2024ragsurvey}. The architectural and deployment details of 
+both models — including the 4-bit quantization used to fit them on a 
+single GPU — are described in Chapter~3.
+
+
+\section{RAG for Legal Applications}
+Despite being introduced in 2020, RAG was not applied to legal tasks until 2023. Since then the number of legal RAG systems has grown quickly — Hindi et al. identify over 20 distinct pipelines by the end of 2024, covering areas including contract review, case law retrieval, legal judgment prediction, and legislative document processing \cite{hindi2024ragsurvey}.
+
+A recurring finding in this literature is that retrieval quality determines answer quality more than the choice of language model. Hindi et al. note that a strong retriever can outperform a combined retriever-LLM system when the LLM is weak, while poor retrieval causes even capable models to produce wrong or hallucinated answers. Dense transformer-based retrievers are the most common choice in legal RAG systems, with BERT-based models appearing frequently. Sparse retrieval with BM25 has also been tested and in some settings outperformed dense approaches. The HyPA-RAG system combines both in a hybrid retriever alongside knowledge graph embeddings, and reports that the chunking strategy had the largest effect on retrieval precision among all variables tested — pattern-based chunking using corpus-specific delimiters achieved the best context recall and faithfulness scores, while semantic chunking underperformed compared to simpler methods unless the parameters were carefully tuned \cite{hindi2024ragsurvey}.
+
+Wiratunga et al. take a different approach with CBR-RAG, which adds case-based reasoning on top of standard RAG \cite{wiratunga2024cbrrag}. Rather than retrieving raw text passages, the system retrieves past cases that are structurally similar to the current query and uses them as few-shot examples for the generator. On the Open Australian Legal QA dataset this approach improved contextual understanding compared to standard retrieval, though the authors note that including multiple retrieved cases in the prompt creates coherence problems when the cases conflict.
+
+Li et al. address conversational legal question answering specifically with LexRAG, a benchmark and system for multi-turn legal consultation \cite{li2024lexrag}. Single-turn retrieval benchmarks do not capture the difficulty of maintaining context across a dialogue, where follow-up questions depend on what was asked before. LexRAG shows that query condensation — reformulating follow-up questions into self-contained queries before retrieval — is necessary for acceptable performance in multi-turn settings.
+
+\section{Legal Contract Datasets and Models}
+Hendrycks et al. released CUAD in 2021 as a benchmark for contract review \cite{hendrycks2021cuad}. The dataset contains 510 commercial contracts with over 13,000 expert annotations marking 41 categories of legally significant clauses. Each annotation is a span within the contract text, and the task is extractive: find the exact passage that answers each question. CUAD is structured in the SQuAD format, with questions following a fixed template that names the clause category and provides a short description of what to look for. This structure makes it well-suited for evaluating RAG systems, since the questions are specific and the ground truth answers are precise text spans.
+
+Chalkidis et al. released LEGAL-BERT in 2020 by continuing BERT pre-training on a corpus of approximately 12~GB of English legal text \cite{chalkidis2020legalbert}. The training data includes legislation, court decisions, and contracts drawn from SEC-EDGAR filings, with US contracts accounting for 34\% of the total corpus. On clause classification and legal NLI tasks, LEGAL-BERT consistently outperforms BERT-base, demonstrating that the distribution shift between general web text and legal language is large enough to warrant domain-specific pre-training. This finding motivates the attention paid in this thesis to retrieval quality over raw model size: if even the embedding representations benefit from legal-domain exposure, then how text is chunked and retrieved matters as much as which generative model produces the final answer.
+
+\section{Evaluation of Generative Systems}
+Evaluating RAG systems is harder than evaluating classification models because the output is free-form text. Hindi et al. review the metrics used across 22 legal RAG papers and find no consensus: different systems use BLEU, METEOR, ROUGE, precision, recall, and various LLM-based scores, making cross-paper comparison difficult \cite{hindi2024ragsurvey}.
+
+Es et al. propose RAGAS as a framework specifically for RAG evaluation \cite{es2024ragas}. It computes four metrics automatically without requiring human annotation: Faithfulness measures whether each claim in the answer is supported by the retrieved context; Answer Relevancy measures whether the answer addresses the question; Context Precision measures whether the retrieved passages are ranked appropriately by relevance; and Context Recall measures whether the retrieved passages contain the information needed to answer the question. RAGAS uses a language model internally to make these judgments, which allows it to handle the open-ended nature of RAG outputs.
+
+Automatic metrics based on text overlap have well-known limitations for this type of evaluation. Zheng et al. show that strong LLMs can serve as reliable judges for open-ended generation tasks, achieving over 80\% agreement with human evaluators on the MT-Bench benchmark \cite{zheng2023judging}. They also identify biases that LLM judges tend to exhibit — preferring longer answers and answers that resemble their own outputs — which need to be controlled for when designing evaluation prompts. This work provides the basis for LLM-as-a-Judge evaluation, where a capable model scores system outputs directly on dimensions such as correctness and conciseness.
+
+

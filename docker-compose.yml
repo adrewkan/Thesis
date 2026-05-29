@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  rag_app:
+    build: .
+    container_name: thesis_rag_container
+    ports:
+      - "8501:8501"   # Streamlit UI
+      - "8888:8888"   # Jupyter Notebook
+    volumes:
+      - .:/app                                      # Live-reload: local changes reflect immediately without rebuild
+      - huggingface_cache:/root/.cache/huggingface  # Persist downloaded models — survives restarts & rebuilds
+    env_file:
+      - .env          # Loads HF_TOKEN, LANGFUSE keys, etc.
+
+    # ── GPU passthrough ──────────────────────────────────────────────────────
+    # Requires: NVIDIA drivers + NVIDIA Container Toolkit on the host.
+    # On Windows with Docker Desktop: enable WSL2 backend and tick
+    # Settings → Resources → GPU acceleration.
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+    command: >
+      bash -c "jupyter notebook --ip=0.0.0.0 --port=8888 --no-browser --allow-root &
+      streamlit run src/app.py --server.port=8501 --server.address=0.0.0.0"
+
+volumes:
+  huggingface_cache:

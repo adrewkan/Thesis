@@ -1,0 +1,88 @@
+# Environment variables and secrets
+.env
+.env.local
+.env.*.local
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+*.sublime-project
+*.sublime-workspace
+
+# Jupyter
+.ipynb_checkpoints
+*.ipynb
+
+# Data and models (usually downloaded at runtime)
+data/CUADv1.json
+data/full_contract_txt/
+data/contracts/
+models/
+checkpoints/
+
+# Docker and runtime
+.dockerignore
+docker-compose.override.yml
+.docker/
+
+# Evaluation results and logs
+results/
+logs/
+*.log
+*.csv
+
+# Langfuse and observability
+langfuse-db/
+.langfuse/
+
+# Chromadb vector store (regenerated from data on startup)
+.chroma/
+chroma_data/
+chroma-results/
+chroma_db_fixed/
+chroma_db_recursive/
+chroma_db_semantic/
+
+# Large files
+*.tar.gz
+*.zip
+
+# OS-specific
+.DS_Store
+Thumbs.db

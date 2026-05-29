@@ -1,0 +1,265 @@
+\chapter{System Design and Methodology}
+\label{chap5}
+
+\section{Introduction}
+
+This chapter describes how the components introduced in Chapters~\ref{chap3}
+and~\ref{chap4} are assembled into a working system and how the experimental
+evaluation is structured. The theoretical background for each component --- the
+transformer architecture, chunking strategies, memory mechanisms, and evaluation
+metrics --- was established in Chapter~\ref{chap3}. The tools used to implement them
+were described in Chapter~\ref{chap4}. This chapter focuses on the specific design
+decisions made when connecting those components: the parameter choices, the retrieval
+architecture, the prompt design, and the evaluation protocol.
+
+\section{System Architecture Overview}
+
+The system follows a retrieve-then-generate pipeline with conversational memory. A
+user submits a question through the web interface. If the conversation has prior turns,
+the question is first reformulated into a standalone query that can be understood
+without the history. The reformulated query is sent to the retrieval layer, which
+fetches the most relevant contract passages from the vector database using a
+combination of dense semantic search and BM25 keyword matching. The retrieved
+passages, the conversation history, and the original question are passed as context to
+the language model, which generates a grounded answer. The answer is returned to the
+user and stored in memory for the next turn.
+
+The pipeline runs entirely locally. Both language models run on the host GPU with
+4-bit NF4 quantization. The vector databases, the embedding model, and the BM25
+index all operate on the same machine without external API calls. Langfuse records
+per-turn latency and token counts in a self-hosted instance running alongside the
+application.
+
+%%\begin{figure}[h]
+%    \centering
+%    \includegraphics[width=\linewidth]{figures/architecture.png}
+%    \caption{High-level architecture of the conversational RAG pipeline.}
+%    \label{fig:architecture}
+%\end{figure}
+
+\section{Document Indexing Pipeline}
+
+\subsection{Contract Loading}
+
+The 510 CUAD contracts are stored as plain text files. They are loaded using
+LangChain's directory loader, which reads all text files from the data directory into
+document objects that carry the source file path as metadata. This path is used later
+by the retrieval layer to filter results to a specific contract when the user names one.
+
+\subsection{Chunking Parameters}
+
+Each of the three chunking strategies described in Section~\ref{chap3} was applied
+to the full contract corpus with the following parameters.
+
+Fixed-size and recursive character chunking both use a target size of 1{,}000
+characters with an overlap of 200 characters between consecutive chunks. The overlap
+ensures that text near a chunk boundary appears in both adjacent segments, reducing
+the chance that a relevant clause is split across two separate chunks. Recursive
+splitting attempts to cut at paragraph breaks, then single newlines, then sentence
+boundaries, before falling back to character-level splitting.
+
+Semantic chunking does not use a fixed size target. Instead, the embedding model
+computes a similarity score between each pair of adjacent sentences, and a chunk
+boundary is placed wherever this score drops sharply, indicating a topic shift. Chunk
+sizes therefore vary with the content of each contract section.
+
+\subsection{Vector Database Construction}
+
+After chunking, each collection is embedded with the all-MiniLM-L6-v2 model and
+stored in a separate ChromaDB database. The three databases are built once and
+persisted to disk. During all subsequent retrieval, they are loaded directly without
+re-embedding. Each database functions as an independent index, so switching the
+chunking strategy changes only which database is queried, with no other modification
+to the pipeline.
+
+\section{Retrieval Architecture}
+
+\subsection{Dense Semantic Search}
+The primary retrieval method is Maximal Marginal Relevance (MMR) search over the ChromaDB index. For each query, MMR first retrieves a candidate pool of 20 passages and then selects the final 5 by balancing similarity to the query against diversity among the selected passages. The balance parameter is set to 0.7, weighting the selection toward relevance while still enforcing diversity.
+
+MMR was chosen specifically for legal contract retrieval because the same clause text frequently appears across multiple contracts with minimal variation. Standard similarity search would often return five nearly identical passages from different documents. The diversity penalty ensures that the retrieved passages provide broader coverage of the relevant contract rather than repeating the same clause. MMR is used as the retrieval method for all six experimental configurations.
+
+\subsection{BM25 Keyword Retrieval and Hybrid Merging}
+
+As discussed in Section~\ref{chap4}, semantic search alone fails when the query and
+the contract text use legally equivalent but semantically distant phrasing. A BM25
+keyword index is built from the same document collection as the vector database and
+run in parallel with the semantic retriever on every query.
+
+To extend BM25 further, each CUAD category name is paired with a set of legal
+synonyms. When the query contains a recognised category, the BM25 query is expanded
+with the corresponding terms before retrieval. For example, a query for
+\textit{Expiration Date} is expanded with terms such as \textit{terminate},
+\textit{termination}, \textit{expire}, \textit{notice period}, and \textit{duration}.
+This bridges the vocabulary gap between the standardised CUAD label and how the
+corresponding clause is actually written in practice. The semantic retriever keeps the
+clean category-and-details query so that embeddings are not diluted by the extra
+terms.
+
+Results from both retrievers are merged into a single list by interleaving, with
+duplicates removed, and trimmed to the target of 5 passages.
+
+\subsection{Contract-Specific Retrieval}
+
+CUAD evaluation questions always refer to a specific named contract. The system
+detects the contract name from the question --- either from a quoted filename or from
+a human-readable title enclosed in quotes --- and filters the semantic search results
+to passages whose source path matches that contract. If too few results survive the
+filter, a BM25 search is run over only that contract's passages to fill the remaining
+slots.
+
+For clause categories that always appear near the top of a contract, such as the
+document title, the names of the parties, and the agreement date, vector search is
+bypassed entirely. The first few passages of the matching file are read directly from
+disk. Vector search is unreliable for these categories because the relevant text
+typically consists of proper nouns and formatting rather than semantically meaningful
+prose.
+
+\subsection{Query Reformulation}
+
+Before retrieval, CUAD's fixed boilerplate --- \textit{``Highlight the parts (if any)
+of this contract related to `[Category]' that should be reviewed by a lawyer. Details:
+[description]''} --- is stripped from the question. The retrieval query is reduced to
+the clause category name and the details description only, giving the vector store a
+cleaner signal. The stripped query is used for semantic search; for BM25, the same
+query is additionally expanded with the category synonyms.
+
+\section{Conversational RAG Chain}
+
+\subsection{Question Condensation}
+
+Follow-up questions in a conversation often contain unresolved references to earlier
+turns, for example \textit{``What about the termination conditions?''} asked after a
+question about a different clause. The retriever has no memory, so such references
+must be resolved before retrieval. At the start of each turn where prior history
+exists, the language model is prompted to rewrite the current question as a
+self-contained query using the conversation history. The condensation prompt is shown
+in Figure~\ref{fig:condense_prompt}.
+
+\begin{figure}[h!]
+    \centering
+    \includegraphics[width=0.9\linewidth]{figures/condense_prompt.png}
+    \caption{Question condensation prompt used to resolve follow-up references before retrieval.}
+    \label{fig:condense_prompt}
+\end{figure}
+
+\subsection{Question Answering Prompt}
+
+The main prompt instructs the model to act as a legal assistant performing extractive
+question answering. It specifies that each retrieved excerpt is labelled with its
+source filename, and that if the question names a specific contract, only excerpts
+from that contract may be used. The prompt defines how to interpret CUAD-style
+category questions, gives explicit rules for categories such as \textit{Document
+Name}, \textit{Parties}, and \textit{Governing Law}, and provides a fixed not-found
+phrase the model must use when the relevant clause is absent from the retrieved
+excerpts. Using a fixed phrase rather than free-form refusal makes it straightforward
+to detect unanswerable responses programmatically during evaluation. The full system
+message is shown in Figure~\ref{fig:qa_prompt}.
+
+\begin{figure}[h!]
+    \centering
+    \includegraphics[width=0.9\linewidth]{figures/qa_prompt.png}
+    \caption{Question answering prompt used in all six experimental configurations.}
+    \label{fig:qa_prompt}
+\end{figure}
+
+\subsection{Memory Configuration}
+
+Windowed memory retains the last 5 question-answer pairs verbatim. These are
+formatted as alternating Human and Assistant lines and prepended to the prompt on
+each turn.
+
+Summary memory uses a third prompt that instructs the language model to update a
+running summary after each turn, preserving key legal details such as clause names,
+party names, dates, and obligations. Only the current summary is included in
+subsequent prompts rather than the full exchange history.
+
+Since the automated evaluation resets the conversation history before each
+question, both memory strategies produce identical outputs in that setting ---
+there is no prior history to window or summarize. The quantitative evaluation
+therefore covers six configurations (three chunking strategies $\times$ two
+language models). The memory strategies are compared separately through a
+manually constructed multi-turn conversation using the system's web interface,
+where the effect of windowed versus summary memory can be observed across
+several follow-up questions within a single session.
+
+
+\section{Experimental Configurations}
+
+The three chunking strategies and two language models produce six configurations
+evaluated in the automated experiment. All six are run on the same question set
+under identical retrieval and prompt conditions. Table~\ref{tab:configs} lists the
+configurations.
+
+\begin{table}[h!]
+\centering
+\caption{The six experimental configurations evaluated in this thesis.}
+\label{tab:configs}
+\begin{tabular}{cll}
+\hline
+\textbf{Config} & \textbf{Chunking Strategy} & \textbf{Language Model} \\
+\hline
+1 & Fixed     & Llama 3.1 8B \\
+2 & Fixed     & Mistral 7B   \\
+3 & Recursive & Llama 3.1 8B \\
+4 & Recursive & Mistral 7B   \\
+5 & Semantic  & Llama 3.1 8B \\
+6 & Semantic  & Mistral 7B   \\
+\hline
+\end{tabular}
+\end{table}
+
+\newpage
+\section{Evaluation Methodology}
+
+\subsection{Question Sampling}
+
+The evaluation uses the 20-question stratified sample described in
+Section~\ref{chap4}. The same set is used for all six configurations and the
+no-retrieval baseline, so all comparisons are made on identical inputs.
+
+
+Before each question is submitted, the title of the corresponding contract is
+prepended in the format \textit{``Contract Title'' --- question text}. This triggers
+the contract-specific retrieval described in Section~5.4.3 and prevents the pipeline
+from searching across all 510 contracts for each query.
+
+\subsection{RAGAS Evaluation}
+
+For each configuration, the system's answers and retrieved context are passed to the
+RAGAS evaluator. RAGAS requires an external language model to make the judgements
+for Faithfulness, Answer Relevancy, Context Precision, and Context Recall. The
+primary evaluator used in this thesis is Llama 3.1 70B via the NVIDIA NIM inference
+API, which provides reliable structured verdicts for the scoring tasks RAGAS requires.
+When NVIDIA rate limits were reached, the evaluation fell back to the local Llama 3.1
+8B model running on the same machine. The smaller local model occasionally produces
+malformed JSON responses for the structured scoring tasks, so any scores returned as
+null in those cases are excluded from the configuration averages.
+
+Unanswerable questions are excluded from RAGAS evaluation. When the ground truth is
+empty, Context Recall is zero by definition regardless of what was retrieved, and
+Faithfulness becomes ill-defined. Including these questions would suppress the
+averages in a way that does not reflect retrieval quality.
+
+\subsection{LLM-as-a-Judge Evaluation}
+
+Correctness and conciseness are scored by the same external model used for RAGAS.
+Correctness is evaluated only for answerable questions, comparing the system's answer
+against the CUAD ground truth span on a 1--5 scale. Conciseness is evaluated for all
+non-error answers regardless of whether the question is answerable. Both scores are
+normalised to the $[0, 1]$ interval using the formula defined in
+Chapter~\ref{chap3}. The judge receives the question, the ground truth (for
+correctness), and the system's answer, and must respond with a JSON object containing
+the score and a one-sentence justification.
+
+\subsection{No-Retrieval Baseline}
+
+To measure the contribution of retrieval, each language model is also run without any
+retrieved context on the same twenty questions. The model receives only the question
+and a brief instruction to answer from general legal knowledge or to respond with
+\textit{``Not found''} if the answer requires reading the specific contract. Since
+there is no retrieved context, RAGAS metrics are not applicable to the baseline.
+Correctness and conciseness are scored by LLM-as-a-Judge, allowing a direct
+comparison of judge correctness between the RAG configurations and the no-retrieval
+baseline for each language model. This comparison quantifies how much retrieval
+contributes to answer quality over what the model already knows from training.
