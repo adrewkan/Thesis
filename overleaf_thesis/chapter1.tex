@@ -1,13 +1,13 @@
 \chapter{Introduction}
 \label{chap1}
 
-Legal contract review is slow and expensive. A single commercial agreement can run dozens of pages, and law firms or corporate legal teams must read through large volumes of such documents to locate specific clauses, check compliance, or compare terms across counterparties. The problem is not just the volume — it is that the relevant information is scattered across documents written in formal, technical language that varies significantly between authors and jurisdictions.
+Legal contract review is slow and expensive. A single commercial agreement can run dozens of pages, and law firms or corporate legal teams must read through large volumes of such documents to locate specific clauses, check compliance, or compare terms across counterparties. The problem is not just the volume. It is that the relevant information is scattered across documents written in formal, technical language that varies significantly between authors and jurisdictions.
 
 Language models have changed what is possible in text processing. Models trained on billions of words can answer questions, summarize documents, and extract structured information from unstructured text. The obvious question is whether these capabilities can be applied to legal contracts in a way that is actually reliable.
 
 The difficulty is that a language model answering questions about a specific contract cannot have memorized that contract during training. When asked about the termination clause in a particular agreement signed in 2018, the model has no access to it. It can only guess based on patterns from training data, which often produces confident but wrong answers. In legal work, a wrong answer is worse than no answer.
 
-Retrieval-Augmented Generation solves this by separating the retrieval and generation steps. The system first searches the document collection for passages likely to contain the answer, then passes those passages to the language model as context. The model generates its answer based on what it was given, not what it may have memorized. This makes the output traceable — you can see exactly which contract passage the answer came from.
+Retrieval-Augmented Generation solves this by separating the retrieval and generation steps. The system first searches the document collection for passages likely to contain the answer, then passes those passages to the language model as context. The model generates its answer based on what it was given, not what it may have memorized. This makes the output traceable because you can see exactly which contract passage the answer came from.
 
 This thesis builds such a system for the CUAD contract dataset and measures how different implementation choices affect the quality of the results.
 
@@ -15,13 +15,13 @@ This thesis builds such a system for the CUAD contract dataset and measures how 
 
 \section{Thesis Subject}
 
-The thesis builds a question answering system for commercial legal contracts using Retrieval-Augmented Generation. The document collection is the CUAD dataset — 510 contracts with expert annotations marking 41 types of legally relevant clauses, such as governing law, termination conditions, renewal terms, and liability caps.
+The thesis builds a question answering system for commercial legal contracts using Retrieval-Augmented Generation. The document collection is the CUAD dataset: 510 contracts with expert annotations marking 41 types of legally relevant clauses, such as governing law, termination conditions, renewal terms, and liability caps.
 
-The system works as a conversational assistant. A user can ask multiple questions about the same contract in sequence, and the system tracks what was discussed in earlier turns to interpret follow-up questions correctly. This matters in practice because legal review does not happen in isolated single questions — a reviewer might ask about one clause and then immediately ask how it interacts with another.
+The system works as a conversational assistant. A user can ask multiple questions about the same contract in sequence, and the system tracks what was discussed in earlier turns to interpret follow-up questions correctly. This matters in practice because legal review does not happen in isolated single questions. A reviewer might ask about one clause and then immediately ask how it interacts with another.
 
-Three implementation decisions are compared. The first is how contracts are split into smaller passages before indexing — three methods are tested: fixed-size splitting by character count, recursive splitting that tries to respect sentence and paragraph boundaries, and semantic splitting that groups text by meaning using sentence embeddings. The second decision is which language model generates the answers — Llama 3.1 8B and Mistral 7B are compared, both running locally on a consumer GPU with 4-bit quantization. The third decision is how conversation history is stored — either keeping the last few turns as-is, or compressing the full history into a running summary using the model itself.
+Three implementation decisions are compared. The first is how contracts are split into smaller passages before indexing. Three methods are tested: fixed-size splitting by character count, recursive splitting that tries to respect sentence and paragraph boundaries, and semantic splitting that groups text by meaning using sentence embeddings. The second decision is which language model generates the answers. Llama 3.1 8B Instruct and Mistral 7B Instruct v0.3 are compared, both running locally on a consumer GPU with 4-bit quantization. The third decision is how conversation history is stored, either keeping the last few turns as-is, or compressing the full history into a running summary using the model itself.
 
-These three decisions produce twelve total configurations. All twelve are evaluated on the same set of questions drawn from the CUAD dataset, with the same metrics, to produce a direct comparison.
+The chunking strategy and language model dimensions produce six configurations, evaluated on the same set of CUAD questions with the same metrics. The two memory strategies do not affect the automated evaluation (each question is run in isolation) and are compared separately in a manual multi-turn test.
 
 
 \section{Contribution of the Thesis}
@@ -30,14 +30,14 @@ The contributions of this thesis are summarized as follows:
 
 \begin{enumerate}
     \item A conversational RAG pipeline was designed and implemented for legal contract question answering, incorporating hybrid retrieval that combines dense vector search with BM25 keyword matching, contract-specific document routing, and legal synonym expansion to handle the vocabulary mismatch between clause category names and how those clauses are written in actual contracts.
-    \item Three chunking strategies were implemented and compared — fixed-size, recursive character, and semantic — across 510 CUAD contracts, producing three separate indexed document collections used throughout the evaluation.
-    \item Two local language models were integrated and compared, Llama 3.1 8B Instruct and Mistral 7B Instruct, both running on consumer hardware using 4-bit NF4 quantization, with two conversation memory strategies each — windowed and summary — resulting in twelve total system configurations.
-    \item All twelve configurations were evaluated on the same stratified sample of CUAD questions using six metrics: Faithfulness, Answer Relevancy, Context Precision, Context Recall, and two LLM-as-a-Judge metrics for answer correctness and conciseness.
+    \item Three chunking strategies were implemented and compared: fixed-size, recursive character, and semantic, across 510 CUAD contracts, producing three separate indexed document collections used throughout the evaluation.
+    \item Two local language models were integrated and compared, Llama 3.1 8B Instruct and Mistral 7B Instruct, both running on consumer hardware using 4-bit NF4 quantization, producing six experimental configurations from the cross of three chunking strategies and two language models. Two conversation memory strategies were also implemented: windowed and summary, and compared separately through a manual multi-turn test in the interactive interface.
+    \item All six configurations were evaluated on the same stratified sample of CUAD questions using six metrics: Faithfulness, Answer Relevancy, Context Precision, Context Recall, and two LLM-as-a-Judge metrics for answer correctness and conciseness.
     \item A no-retrieval baseline was established by running the same questions through the language model without any retrieved context, providing a direct measure of how much retrieval contributes to answer correctness.
     \item The system was instrumented with Langfuse for real-time observability, recording retrieval latency, generation latency, and token counts per query across all configurations.
 \end{enumerate}
 
 \section{Thesis Outline}
 
-Related work on language models, retrieval systems, and legal NLP is covered in Chapter 2. Chapter 3 describes the technical background on the core components used in this thesis: large language models, vector databases, chunking methods, and evaluation frameworks. Chapter 4 presents the system architecture and the implementation decisions made at each stage of the pipeline. The experimental setup, including the dataset, the twelve configurations, and the evaluation metrics, is detailed in Chapter 5. Chapter 6 presents the results and compares configurations across all metrics. Chapter 7 concludes the thesis and discusses limitations and possible directions for future work.
+Related work on language models, retrieval systems, and legal NLP is covered in Chapter 2. Chapter 3 describes the technical background on the core components used in this thesis: large language models, vector databases, and evaluation frameworks. Chapter 4 introduces the CUAD dataset and the software tools used to build the system. Chapter 5 describes the system architecture, the three chunking strategies, the retrieval design, the prompts, and the evaluation protocol. Chapter 6 reports the results of the automated evaluation across the six configurations and the no-retrieval baseline. Chapter 7 presents the interactive Streamlit application and compares the two memory strategies in a multi-turn setting. Chapter 8 concludes the thesis and discusses limitations and possible directions for future work.
 

@@ -4,11 +4,10 @@ from langchain_experimental.text_splitter import SemanticChunker
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import Chroma
 
-# Import our custom data loader function
 from data_loader import load_local_contracts
 
 def process_and_store_chunks():
-    # Load the documents using the function we built earlier
+    # Load the contract text files
     print("Loading documents from data directory...")
     docs = load_local_contracts("./data")
     
@@ -16,7 +15,7 @@ def process_and_store_chunks():
         print("No documents found. Exiting process.")
         return
 
-    # Initialize the embedding model (Free HuggingFace model for testing)
+    # Initialize the embedding model (all-MiniLM-L6-v2, 384-dim)
     print("\nInitializing embedding model...")
     embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
 
@@ -58,7 +57,7 @@ def process_and_store_chunks():
 
     for name, chunks, persist_dir in db_configs:
         if os.path.exists(persist_dir):
-            print(f"Skipping {name} DB — already exists at '{persist_dir}'.")
+            print(f"Skipping {name} DB - already exists at '{persist_dir}'.")
             continue
         print(f"Saving {name} Chunks DB...")
         Chroma.from_documents(

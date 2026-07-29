@@ -1,11 +1,14 @@
 """
-app.py  —  Streamlit UI for the Legal RAG Assistant
+app.py  -  Streamlit UI for the Legal RAG Assistant
 
 Lets you interactively switch between every experimental axis from the thesis:
   - Chunking strategy : fixed | recursive | semantic
   - LLM               : llama (3.1 8B) | mistral (7B)
   - Memory type       : windowed | summary
-  - Retrieval         : MMR (fixed — not configurable from the UI)
+  - Retrieval k       : number of chunks retrieved per query
+
+Retrieval is hybrid: contract-scoped dense similarity search combined with a
+BM25 keyword index, merged and deduplicated. See rag_chain.RAGChain for details.
 
 LLMs and vectorstores are cached so switching one axis does not reload the other.
 """
@@ -64,7 +67,7 @@ def _load_bm25_retriever(chunking_strategy: str, k_docs: int):
 
 
 # ------------------------------------------------------------------ #
-# Helper — must be defined before the message-replay loop uses it     #
+# Helper - must be defined before the message-replay loop uses it     #
 # ------------------------------------------------------------------ #
 
 def _render_assistant_meta(msg: dict):
@@ -74,7 +77,7 @@ def _render_assistant_meta(msg: dict):
     sources      = msg.get("sources", [])
 
     # Show the reformulated retrieval query only when it differs from what the
-    # user typed — this makes the memory's question-condensation step visible.
+    # user typed - this makes the memory's question-condensation step visible.
     if standalone_q and standalone_q != original_q:
         st.caption(f"🔍 Retrieval query: *\"{standalone_q}\"*")
 
@@ -109,7 +112,7 @@ def _init_state():
 _init_state()
 
 # ------------------------------------------------------------------ #
-# Sidebar — configuration panel                                        #
+# Sidebar - configuration panel                                        #
 # ------------------------------------------------------------------ #
 
 with st.sidebar:
@@ -128,9 +131,9 @@ with st.sidebar:
         "LLM",
         ["llama", "mistral"],
         format_func=lambda x: (
-            "Llama 3.1 8B Instruct" if x == "llama" else "Mistral 7B Instruct"
+            "Llama 3.1 8B" if x == "llama" else "Mistral 7B"
         ),
-        help="Both models run locally with 4-bit NF4 quantization (~5 GB VRAM each).",
+        help="Both models run locally with 4-bit NF4 quantization.",
     )
 
     st.markdown("#### Chunking Strategy")
@@ -139,9 +142,9 @@ with st.sidebar:
         ["fixed", "recursive", "semantic"],
         index=1,
         format_func=lambda x: {
-            "fixed":     "Fixed-size  (1 000 chars, overlap 200)",
-            "recursive": "Recursive Character",
-            "semantic":  "Semantic  (embedding-based breakpoints)",
+            "fixed":     "Fixed",
+            "recursive": "Recursive",
+            "semantic":  "Semantic",
         }[x],
     )
 
@@ -150,7 +153,7 @@ with st.sidebar:
         "Strategy",
         ["windowed", "summary"],
         format_func=lambda x: (
-            "Windowed  (last k turns verbatim)"
+            "Windowed  (last k turns)"
             if x == "windowed"
             else "Conversation Summary  (LLM-compressed)"
         ),
@@ -260,8 +263,8 @@ if not st.session_state.chain:
     st.info(
         "**Getting started**\n\n"
         "1. Pick a configuration in the sidebar.\n"
-        "2. Click **🚀 Load Chain** — the first load downloads the model (~5 GB); "
-        "subsequent loads are instant.\n"
+        "2. Click **🚀 Load Chain** (the first load downloads the model,"
+        " subsequent loads are instant).\n"
         "3. Ask questions about the contracts below.",
         icon="👈",
     )

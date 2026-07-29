@@ -86,3 +86,9 @@ chroma_db_semantic/
 # OS-specific
 .DS_Store
 Thumbs.db
+
+# Project files kept out of the public repo
+Legal_RAG_System_Documentation_GR.docx
+langfuse_token_metrics.md
+src/PROMPT_HISTORY.md
+scripts/

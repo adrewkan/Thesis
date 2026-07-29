@@ -21,7 +21,7 @@ def get_embeddings() -> HuggingFaceEmbeddings:
 def load_vectorstore(strategy: str, embeddings: HuggingFaceEmbeddings = None) -> Chroma:
     """
     Connect to an existing ChromaDB for the given chunking strategy.
-    Does NOT re-add documents — reads the persisted index only.
+    Does NOT re-add documents - reads the persisted index only.
 
     Args:
         strategy:   One of 'fixed', 'recursive', 'semantic'
@@ -62,7 +62,7 @@ def get_retriever(
     Build a retriever for one chunking strategy.
 
     MMR (Maximal Marginal Relevance) is the default because legal contracts
-    contain many near-identical clauses across documents — MMR diversifies the
+    contain many near-identical clauses across documents - MMR diversifies the
     retrieved chunks so the LLM sees a broader context instead of five copies
     of the same sentence.
 
@@ -111,7 +111,7 @@ def get_bm25_retriever(
 
     Args:
         strategy:   One of 'fixed', 'recursive', 'semantic'
-        k:          Number of candidates to return (set high — caller filters)
+        k:          Number of candidates to return (set high - caller filters)
         embeddings: Passed to load_vectorstore to avoid reloading the model
 
     Returns:
@@ -122,7 +122,7 @@ def get_bm25_retriever(
 
     vectorstore = load_vectorstore(strategy, embeddings)
 
-    # Fetch in batches — SQLite (used by ChromaDB) has a hard limit on the
+    # Fetch in batches - SQLite (used by ChromaDB) has a hard limit on the
     # number of SQL variables per query (~999), so fetching all 50k+ chunks
     # at once raises "too many SQL variables". Batching of 5 000 stays safe.
     BATCH = 5_000

@@ -1,12 +1,55 @@
-\chapter{Συμπεράσματα}
+\chapter{Conclusion}
 \label{chap_last}
 
-Εδώ εξηγούμε ότι θα συνοψίσουμε την μελέτη που εκπονήθηκε στα πλαίσια της διπλωματικής.
+This chapter draws together the findings of the thesis. It first summarizes what was built and what the evaluation showed across the six configurations, the no-retrieval baseline, and the memory comparison, and then sets out the main directions for future work that follow from the system's limitations.
 
-\section{Σύνοψη και συμπεράσματα}
 
-Εδώ συνοψίζουμε τα αποτελέσματα της διπλωματικής και περιγράφουμε τα συμπεράσματα που προέκυψαν, αρνητικά και θετικά. Επιβεβαιώνουμε την συνεισφορά της διπλωματικής στα προβλήματα που αναφέραμε στην εισαγωγή.
+\section{Summary and Conclusions}
+This thesis built a conversational question answering system for commercial legal contracts and measured how its main design choices affect the quality of the answers. The system retrieves passages from the CUAD corpus with a combination of dense vector search and BM25 keyword matching, routes each query to the named contract, and generates an answer with a locally run language model
+under 4-bit quantization. Three chunking strategies and two language models were crossed to give six configurations, each evaluated on the same stratified sample of CUAD questions with four RAGAS metrics and two LLM-as-a-Judge metrics.
 
-\section{Μελλοντικές επεκτάσεις}
+The introduction set out two properties that make a language model unreliable on its own for this task: it tends to produce confident but ungrounded answers when it lacks the information, and it cannot access documents it never saw during training. The no-retrieval baseline measured both directly. Without any retrieved context, Llama~3.1~8B reached only 0.36 on Judge Correctness, either declining or describing in general terms where the requested clause usually appears, without recovering the contract-specific facts. Adding retrieval raised its Correctness to 0.77 on average across the three chunking strategies, a gain of roughly 0.41 points. Mistral~7B moved far less, from 0.63 to 0.67, but its higher baseline is misleading: it answers every question with a fluent generic legal template that the judge credits for completeness even though it contains no facts from the specific contract. The retrieval component, not the language model on its own, is what makes the system produce grounded, contract-specific answers.
 
-Εδώ δίνουμε ιδέες για επέκταση της διπλωματικής.
+Retrieval quality was high and stable across all six configurations. Context Precision stayed between 0.91 and 0.95 and Context Recall between 0.87 and 0.96, because every configuration shares the same retrieval mechanism and the choice of language model does not change what is retrieved. The generation metrics varied more and divided along model lines, though by a smaller margin than the model sizes would suggest. Llama~3.1~8B scored higher than Mistral~7B on the generation metrics in every chunking configuration, with an average gap of about 0.16 on Faithfulness and 0.10 on Judge Correctness. The best single configuration was semantic chunking with Llama, which reached 0.91 Faithfulness, 0.70 Answer Relevancy, and 0.80 Correctness, the only configuration where all three reached 0.70 or above.
+
+The effect of the chunking strategy was milder and model-dependent. For Llama, answer quality improved from fixed to recursive to semantic chunking, with semantic giving the best Answer Relevancy and Correctness and recursive the highest Faithfulness. For Mistral the picture was mixed: recursive chunking gave its best Correctness while semantic gave its best Answer Relevancy, and, unlike in earlier experiments, semantic chunking was no longer harmful to it. A deployment that fixes the language model should therefore choose the chunking strategy to match it, rather than assuming one strategy is best in every case.
+
+The quality gains came at a cost in speed. Mistral generated answers in 7 to 22 seconds depending on the chunking strategy. Llama ranged from 10-15 seconds on fixed and recursive chunks to an average of 65 seconds on semantic chunks, with the slowest individual queries running several minutes, where the larger passages lengthen the input the model has to process. Semantic chunking with Llama gives the best answers but is too slow for an interactive setting. For the real-time chat interface, fixed or recursive chunking with Llama offers the better balance of quality and response time.
+
+The two models also handled the unanswerable questions differently. Across the six configurations the system correctly declined 30 of the 36 unanswerable questions. All six failures came from Llama, which occasionally treated a topically adjacent clause as a positive answer. Mistral's shorter and more cautious style refused cleanly in every case. The behaviour that helped Llama on answerable questions, producing a fuller and more committed response, worked against it when the correct response was that the clause was absent.
+
+The memory comparison showed the difference between the two strategies. Windowed memory keeps the last few turns verbatim and discards older ones once the buffer is full. In the test session (memory window of 5 turns) it lost the first turn after six later turns and could no longer recall a fact the user had stated about themselves. Summary memory compressed the full conversation instead of discarding it and retained that fact through to the end of the session. For long sessions over a single contract, summary memory is the more appropriate choice.
+
+Two interesting findings came from the evaluation metrics. First, Faithfulness and Correctness can diverge. When retrieval returns the wrong passage, the model can produce an answer that is fully grounded in what it was given yet wrong against the ground truth. Faithfulness on its own is therefore not enough to judge answer quality. Second, the CUAD question format does not match how RAGAS computes Answer Relevancy: the fixed review-instruction template produces low relevancy scores even for correct answers, so that metric understates the system's quality on this dataset.
+
+Taken together, the results support the approach set out in the introduction. Retrieval-augmented generation makes a local, openly available language model usable for contract question answering on consumer hardware, with answers that can be traced back to specific contract passages. The system runs entirely on a single 8~GB GPU with no external inference calls. Its main weaknesses are the latency of the highest-quality configuration and the dependence of answer quality on the retriever returning the correct passage.
+
+
+\section{Future Work}
+
+Several directions follow from the limitations above. The most pressing is the latency of semantic chunking with Llama. A re-ranking step placed after hybrid retrieval would let the system pull a larger candidate pool and then pass only the few most relevant passages to the model. This would
+raise Context Precision and at the same time cut the input length that drives generation time. A cross-encoder re-ranker is the usual choice and would fit between the existing retrieval and generation stages without other changes to the pipeline.
+
+%The evaluation could be made more reliable. Twenty questions is a small sample,
+%and the sampling effect already visible in the one low Context Recall score
+%shows its sensitivity. A larger sample drawn across more contracts, with results
+%reported alongside confidence intervals, would make the differences between
+%configurations more trustworthy. The Answer Relevancy mismatch could be handled
+%by rewriting the CUAD review instructions into natural questions before scoring,
+%so that the metric reflects the quality of the answer rather than the phrasing
+%of the dataset template.
+
+The retrieval stage could be adapted to the legal domain. The current system
+embeds contracts with a general-purpose sentence encoder. A domain-adapted
+embedding model such as LEGAL-BERT, discussed in Chapter~\ref{chap2}, may close
+part of the vocabulary gap between CUAD category names and contract wording that
+the BM25 synonym expansion currently handles through a hand-written list.
+Tabular content, which the present embedding model ranks poorly, would benefit
+from a dedicated table-extraction step before indexing.
+
+Finally, the two memory mechanisms could be combined. Windowed memory keeps recent turns
+exact but loses older context, while summary memory keeps older context but
+loses detail. A hybrid that holds the most recent turns verbatim and summarizes
+everything before them would keep the strengths of both, and is a natural next
+step from the two strategies compared here.
+

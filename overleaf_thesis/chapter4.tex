@@ -1,25 +1,17 @@
 \chapter{Dataset and Tools}
 \label{chap4}
+
+This chapter describes the data and the software used to build the system. It first presents the CUAD contract dataset that the system retrieves over and from which the evaluation questions are drawn, including its format and the properties that affect how the results should be interpreted. It then introduces the main libraries and frameworks used in the implementation, from the retrieval and generation stack through to the observability and evaluation tools.
+
 \section{The CUAD Dataset}
 
-CUAD (Contract Understanding Atticus Dataset) was introduced by Hendrycks et al.\
-\cite{hendrycks2021cuad} as a large-scale benchmark for machine learning on legal
-contracts. It contains 510 commercial contracts collected from SEC-EDGAR, the public
-filings database of the U.S.\ Securities and Exchange Commission. Expert lawyers
-labelled each contract against 41 clause categories that practitioners commonly flag
-during contract review, including \textit{Governing Law}, \textit{Non-Compete},
-\textit{IP Ownership Assignment}, \textit{Expiration Date}, and \textit{Termination for
-Convenience}, among others. The dataset contains more than 13{,}000 manually created
-annotations in total. Of the 41 categories, 33 require a yes/no answer indicating whether a given clause exists in the contract, while the remaining 8 require an extractive answer such as a
-state name, a date, or an entity name. This distinction matters for evaluation: the
-system must handle both the detection of a clause and the extraction of its exact
-wording.
+CUAD (Contract Understanding Atticus Dataset) was introduced by Hendrycks et al.\ \cite{hendrycks2021cuad} as a large-scale benchmark for machine learning on legal contracts. It contains 510 commercial contracts collected from SEC-EDGAR, the public filings database of the U.S.\ Securities and Exchange Commission. Expert lawyers labelled each contract against 41 clause categories that practitioners commonly flag during contract review, including Governing Law, Non-Compete, IP Ownership Assignment, Expiration Date, and Termination for Convenience, among others. The dataset contains more than 13{,}000 manually created annotations in total. Of the 41 categories, 33 require a yes/no answer indicating whether a given clause exists in the contract, while the remaining 8 require an extractive answer such as a state name, a date, or an entity name. This distinction matters for evaluation: the system must handle both the detection of a clause and the extraction of its exact wording.
 \subsection{Data Format}
 
 CUAD follows the SQuAD extractive reading comprehension format \cite{rajpurkar2016squad}. Each record pairs a question with a passage from one contract, and the expected answer is a verbatim span extracted from that passage. A boolean field \texttt{is\_impossible} marks whether the queried clause is absent from the contract, enabling evaluation of the system's ability to recognise unanswerable questions. Alongside the annotated JSON file, the dataset distributes all 510 contract texts as plain text files.
 
 \subsection{Usage in This Thesis}
-
+\label{sec:question-sampling}
 The 510 contract texts were loaded, split into chunks, and stored in three separate ChromaDB vector databases, one per chunking strategy. The chunking strategies themselves are described in
 Chapter~\ref{chap5}.
 
@@ -40,9 +32,9 @@ Working with CUAD in an automated evaluation context revealed several properties
 the dataset that affect how results should be interpreted.
 
 \textbf{Non-conversational question format.}
-Every question in CUAD follows a fixed boilerplate template: \textit{``Highlight the
+Every question in CUAD follows a fixed boilerplate template: ``Highlight the
 parts (if any) of this contract related to `[Category]' that should be reviewed by a
-lawyer. Details: [description].''} This is a legal review instruction, not a natural
+lawyer. Details: [description].'' This is a legal review instruction, not a natural
 question. When RAGAS computes Answer Relevancy, it generates reverse questions from
 the system's answer and compares them to the original question using embeddings.
 Because the language model answers as if the question were a factual query, the
@@ -59,9 +51,8 @@ in contracts uses varied legal phrasing: a contract may express expiration as
 \textit{``shall terminate upon 90 days written notice''}, or state the governing law
 as \textit{``construed in accordance with the laws of the State of Delaware''}. These
 pairs are legally equivalent but semantically distant in embedding space, so a
-semantic-only retriever can miss the relevant clause even when it is present. This
-motivated the addition of hybrid BM25 retrieval with legal synonym expansion to the
-pipeline.
+semantic-only retriever can miss the relevant clause even when it is present.This motivated the addition of hybrid retrieval, in which a BM25 keyword index runs alongside the dense retriever and its queries are expanded with legal synonyms for each clause category. Both are described in detail in Chapter~\ref{chap5}.
+
 
 \textbf{Structured data and annotation quirks.}
 Some ground truth answers in CUAD are formatted as tables containing payment
@@ -75,6 +66,8 @@ the dataset rather than the retrieval system.
 
 
 \section{Implementation Tools}
+
+This section introduces the main libraries and frameworks used to implement the system, grouped by their role in the pipeline: orchestration, storage and retrieval, generation, the user interface, observability, and evaluation.
 
 \subsection{LangChain}
 
@@ -101,7 +94,7 @@ directly comparable.
 The Hugging Face Transformers library \cite{wolf2020transformers} was used to load
 Llama~3.1~8B Instruct and Mistral~7B Instruct locally from the Hugging Face Hub.
 Both models were loaded with 4-bit NF4 quantization via bitsandbytes
-\cite{dettmers2022qlora}, reducing memory consumption from approximately 16\,GB
+\cite{dettmers2022qlora}, reducing memory consumption from approximately 16\,GB in half precision
 to roughly 5\,GB per model with minimal quality loss on extractive tasks. Model
 weights are distributed across the available GPU automatically. Each model is
 subsequently wrapped so that the tokenizer's native chat template is applied
@@ -119,20 +112,18 @@ alternatives while still providing reliable retrieval quality for English legal 
 
 \subsection{BM25 Keyword Retrieval}
 
-In addition to semantic search, the system uses BM25 \cite{robertson2009bm25} for keyword-based retrieval. Semantic search can fail when the query and the contract text use different but legally equivalent phrasing, for example when a query for \textit{Expiration Date} must match a clause
-that says \textit{terminate upon 90 days notice}. BM25 bridges this gap by matching exact
-and near-exact terms regardless of semantic distance. The BM25 index is built from the documents stored in the active vector database, and its results are merged with the semantic search hits before being passed to the LLM.
+In addition to semantic search, the system uses BM25 \cite{robertson2009bm25} for keyword-based retrieval. As noted earlier in this chapter, semantic search can fail when the query and the contract text use different but legally equivalent phrasing. BM25 bridges this gap by matching exact and near-exact terms regardless of semantic distance. The BM25 index is built from the documents stored in the active vector database, and its results are merged with the semantic search hits before being passed to the LLM.
 
 \subsection{Langfuse}
 
 Langfuse \cite{langfuse2023} is an observability platform for LLM applications.
 Each call to the RAG pipeline creates a trace that records the user's question, the
 reformulated retrieval query, the retrieved chunks, the generated answer, and the
-latency of each processing step. In this thesis, Langfuse is used during the
+latency of each processing step. In this thesis, Langfuse Cloud is used during the
 experimental evaluation to collect per-configuration metrics such as generation
-latency and token consumption across all 12 pipeline configurations, enabling a
-direct comparison between the two language models and the different chunking and
-memory strategies.
+latency and token consumption across all six pipeline configurations, enabling a
+direct comparison between the two language models and the three chunking strategies.
+
 
 \subsection{Streamlit}
 
@@ -150,9 +141,9 @@ switching one configuration option does not trigger a full reload of the pipelin
 
 The full application is containerised with Docker. A dedicated configuration file
 installs PyTorch with CUDA support first, then all remaining dependencies. The web
-interface is exposed on a fixed port, and a compose file allows the application to
-be started alongside a self-hosted Langfuse instance with a single command.
-Containerisation ensures the environment is fully reproducible across different
+interface is exposed on a fixed port. Langfuse Cloud is accessed through API keys
+supplied as environment variables, so no local observability service runs alongside
+the container. Containerisation ensures the environment is fully reproducible across different
 machines.
 
 \subsection{RAGAS}

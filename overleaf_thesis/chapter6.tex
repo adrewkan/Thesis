@@ -1,8 +1,12 @@
 \chapter{Experimental Results}
+\label{chap6}
 
+This chapter presents the results of the automated evaluation across all six configurations. It first describes the evaluation setup, then reports the headline scores and analyses them from several angles: retrieval quality, generation quality, the handling of unanswerable questions, the separate effects of the chunking strategy and the language model, response latency, and token consumption. It closes with qualitative observations on recurring answer patterns and a no-retrieval baseline that isolates the contribution of the retrieval component.
 
 \section{Evaluation Setup}
-All six configurations were evaluated using GPT-4o-mini as the external judge for both RAGAS metrics and the LLM-as-a-Judge scores. Each configuration was run on the same stratified 20-question sample described in Section 5.7.1. Fourteen of the twenty questions were answerable (is\_impossible=False) and six were unanswerable. RAGAS metrics were computed only on the answerable subset; Judge Correctness was also restricted to answerable questions; Judge Conciseness was computed for all non-error answers. Results for each question were written to a timestamped CSV file and averaged per configuration. The six unanswerable questions were evaluated manually: for each one, the model's response was inspected to determine whether it correctly acknowledged that the requested information was not present in the contract. A response was counted as correct if it explicitly stated that the answer could not be found, without fabricating a plausible-sounding but unsupported answer. The retriever was configured with $k=10$ chunks per query for all runs. Each configuration was evaluated independently, with no shared conversation history between questions.
+
+All six configurations were evaluated using GPT-4o-mini as the external judge for both RAGAS metrics and the LLM-as-a-Judge scores. Each configuration was run on the same stratified 20-question sample described in Section~\ref{sec:eval-sampling}. Fourteen of the twenty questions were answerable (is\_impossible=False) and six were unanswerable. RAGAS metrics were computed only on the answerable subset. Judge Correctness was also restricted to answerable questions. Judge Conciseness was computed for all non-error answers. Results for each question were written to a timestamped CSV file and averaged per configuration. The six unanswerable questions were evaluated manually: for each one, the model's response was inspected to determine whether it correctly acknowledged that the requested information was not present in the contract. A response was counted as correct if it explicitly stated that the answer could not be found, without fabricating a plausible-sounding but unsupported answer. The retriever was configured with $k=10$ chunks per query for all runs. Each configuration was evaluated independently, with no shared conversation history between questions.
+
 
 \section{Results Overview}
 
@@ -11,52 +15,223 @@ Table~\ref{tab:results} summarizes the mean scores across all six configurations
 
 \begin{table}[ht]
 \centering
-
-\label{tab:results}
 \resizebox{\textwidth}{!}{%
-\begin{tabular}{llccccccc}
+\begin{tabular}{llccccccccc}
 \toprule
-\textbf{Chunking} & \textbf{LLM} & \textbf{Faithfulness} & \textbf{Ans.\ Rel.} & \textbf{Ctx.\ Prec.} & \textbf{Ctx.\ Rec.} & \textbf{Correctness} & \textbf{Conciseness} & \textbf{Latency (s)} \\
+\textbf{Chunking} & \textbf{LLM}
+  & \makecell{\textbf{Context}\\\textbf{Precision}}
+  & \makecell{\textbf{Context}\\\textbf{Recall}}
+  & \textbf{Faithfulness}
+  & \makecell{\textbf{Answer}\\\textbf{Relevancy}}
+  & \makecell{\textbf{Judge}\\\textbf{Correctness}}
+  & \makecell{\textbf{Judge}\\\textbf{Conciseness}}
+  & \makecell{\textbf{Latency}\\\textbf{(s)}}
+  & \makecell{\textbf{Input}\\\textbf{tokens}}
+  & \makecell{\textbf{Output}\\\textbf{tokens}} \\
 \midrule
-Fixed     & Llama 3.1 8B  & 0.69 & 0.55 & \textbf{0.89} & 0.84 & 0.71 & 0.80 & 29.9 \\
-Fixed     & Mistral 7B    & 0.51 & 0.24 & 0.87          & 0.86 & 0.46 & \textbf{0.90} & 13.7 \\
-Recursive & Llama 3.1 8B  & 0.70 & 0.48 & 0.88          & 0.78 & 0.70 & 0.78 & 19.2 \\
-Recursive & Mistral 7B    & 0.58 & 0.43 & 0.88          & 0.81 & 0.45 & \textbf{0.90} & \textbf{13.2} \\
-Semantic  & Llama 3.1 8B  & \textbf{0.81} & \textbf{0.71} & 0.85 & \textbf{0.89} & \textbf{0.79} & 0.79 & 148.3 \\
-Semantic  & Mistral 7B    & 0.46 & 0.37 & 0.85          & \textbf{0.89} & 0.48 & \textbf{0.90} & 52.5 \\
+Fixed     & Llama 3.1 8B & \textbf{0.95} & 0.87 & 0.89 & 0.58 & 0.73 & 0.75 & 14.6 & 4{,}183 & 188 \\
+Fixed     & Mistral 7B   & 0.94 & 0.91 & 0.71 & 0.48 & 0.63 & 0.83 & \textbf{7.4} & 4{,}882 & \textbf{109} \\
+Recursive & Llama 3.1 8B & \textbf{0.95} & 0.92 & \textbf{0.93} & 0.65 & 0.79 & 0.75 & 10.1 & \textbf{2{,}489} & 207 \\
+Recursive & Mistral 7B   & \textbf{0.95} & 0.88 & 0.77 & 0.53 & 0.75 & \textbf{0.90} & 7.5 & 2{,}991 & 139 \\
+Semantic  & Llama 3.1 8B & 0.93 & \textbf{0.96} & 0.91 & 0.70 & \textbf{0.80} & 0.75 & 64.9 & 8{,}275 & 202 \\
+Semantic  & Mistral 7B   & 0.91 & \textbf{0.96} & 0.77 & \textbf{0.71} & 0.63 & 0.81 & 22.4 & 9{,}641 & 147 \\
 \bottomrule
 \end{tabular}%
 }
-\caption{Mean evaluation scores for all six configurations. Higher is better for all metrics except latency.}
+\caption{Mean evaluation scores for all six configurations. Higher is better for all metrics except latency and token counts, where lower is better.}
 \label{tab:results}
 \end{table}
 
-\section{Retrieval Quality}
-Context Precision and Context Recall are stable across all six configurations. Precision ranges from 0.85 to 0.89 and recall from 0.78 to 0.89 — a spread of less than 0.1 in both cases. This reflects the fact that all configurations share the same retrieval mechanism: hybrid MMR and BM25 with legal synonym expansion over the same document corpus. The model choice has no effect on what gets retrieved, since retrieval runs before the language model is invoked. Switching chunking strategy changes chunk boundaries, not the retrieval logic.
 
-The one outlier is Context Recall for Recursive+Llama at 0.78, lower than the 0.84–0.89 range seen elsewhere. This is likely a sampling effect: the 20-question sample included several questions whose ground truth spans sit near the boundaries used by recursive splitting for those specific contracts, causing the relevant text to be split across two chunks rather than appearing in a single retrieved passage.
+The subsections that follow read this table one dimension at a time: first the
+retrieval metrics, then the generation metrics, and finally the cost measures of latency and token consumption.
 
-\section{Generation Quality}
-The generation metrics — Faithfulness, Answer Relevancy, and Judge Correctness — show wider variation and divide clearly along model lines.
+The subsections that follow read this table one dimension at a time: first the retrieval metrics, then the generation metrics, then the separate effects of the chunking strategy and the language model, and finally the cost measures of latency and token consumption. The final subsection describes the recurring answer patterns behind these scores, which the metrics on their own do not reveal. Each subsection reproduces the columns of Table~\ref{tab:results} that it discusses, so that the relevant figures sit beside the text interpreting them. These smaller tables report no new measurements. Every value in them is taken directly from Table~\ref{tab:results}.
 
-Semantic+Llama produced the best generation scores of all six configurations: Faithfulness 0.81, Answer Relevancy 0.71, Judge Correctness 0.79. It is the only configuration where all three generation metrics exceeded 0.7. The other two Llama configurations scored 0.69–0.70 on Faithfulness but dropped to 0.48–0.55 on Answer Relevancy, suggesting that fixed and recursive chunks frequently include surrounding content beyond the relevant clause, and Llama quotes it rather than isolating the answer.
-
-Mistral shows a different failure mode. Faithfulness ranges from 0.46 to 0.58 across the three chunking strategies — consistently below all three Llama configurations — while conciseness sits at 0.90 regardless of chunking. Mistral produces shorter answers, but those answers are less grounded in the retrieved context and less factually correct. The gap in Judge Correctness is large: Mistral averages 0.45–0.48 against Llama's 0.70–0.79.
-
-Semantic+Mistral is the worst single configuration on Faithfulness at 0.46. The semantic chunks that raised Llama's faithfulness to its peak instead appear to overwhelm Mistral: the model generates a short answer that does not draw on the full content of the longer, topically coherent passage it was given.
-
-\subsection{Unanswerable Questions}
-
-Six of the twenty questions correspond to clauses that are not present in the queried contracts (\texttt{is\_impossible=True}). Because there is no ground-truth answer text to compare against, these questions were excluded from the automated RAGAS and Judge Correctness calculations. Judge Conciseness was still computed automatically, but conciseness alone does not measure whether the model correctly declined to answer; a short hallucination scores as well as a short correct refusal.
-
-The six unanswerable questions were therefore evaluated manually. A response was counted as correct if it ultimately acknowledged that the requested clause was not present in the contract, even if it first discussed adjacent or topically related sections. This rule reflects how the system would be used in practice: surfacing nearby material for a human reviewer to consider is preferable to silently omitting it, provided the model does not falsely claim that the requested clause is present. A response was counted as incorrect if it treated an adjacent clause as the answer or if it concluded that the requested clause might exist when in fact it does not.
-
-Table~\ref{tab:unanswerable} shows the per-configuration results. Across all six configurations, the models handled 33 of 36 unanswerable questions correctly (average 5.5 of 6).
+\subsection{Retrieval Quality}
 
 \begin{table}[ht]
 \centering
-\caption{Manual evaluation of the six unanswerable (\texttt{is\_impossible=True}) questions per configuration.}
-\label{tab:unanswerable}
+\begin{tabular}{llcc}
+\toprule
+\textbf{Chunking} & \textbf{LLM} & \textbf{Context Precision} & \textbf{Context Recall} \\
+\midrule
+Fixed     & Llama 3.1 8B & \textbf{0.95} & 0.87 \\
+Fixed     & Mistral 7B   & 0.94 & 0.91 \\
+Recursive & Llama 3.1 8B & \textbf{0.95} & 0.92 \\
+Recursive & Mistral 7B   & \textbf{0.95} & 0.88 \\
+Semantic  & Llama 3.1 8B & 0.93 & \textbf{0.96} \\
+Semantic  & Mistral 7B   & 0.91 & \textbf{0.96} \\
+\bottomrule
+\end{tabular}
+\caption{Retrieval metrics, taken from Table~\ref{tab:results}.}
+\label{tab:excerpt-retrieval}
+\end{table}
+
+Context Precision and Context Recall are high and stable across all six configurations. Precision ranges from 0.91 to 0.95 and recall from 0.87 to 0.96, a spread of well under 0.1 in both cases. This reflects the fact that all configurations share the same retrieval mechanism: hybrid MMR and BM25 with legal synonym expansion over the same document corpus, scoped to the named contract. The model choice has no effect on what gets retrieved, since retrieval runs before the language model is invoked, and switching chunking strategy changes chunk boundaries rather than the retrieval logic. The consistently high precision and recall confirm that the relevant clause is almost always present in the retrieved context. Where the system falls short, the cause lies in generation rather than retrieval.
+
+
+\subsection{Generation Quality}
+
+\begin{table}[ht]
+\centering
+\begin{tabular}{llcccc}
+\toprule
+\textbf{Chunking} & \textbf{LLM} & \textbf{Faithfulness}
+  & \makecell{\textbf{Answer}\\\textbf{Relevancy}}
+  & \makecell{\textbf{Judge}\\\textbf{Correctness}}
+  & \makecell{\textbf{Judge}\\\textbf{Conciseness}} \\
+\midrule
+Fixed     & Llama 3.1 8B & 0.89 & 0.58 & 0.73 & 0.75 \\
+Fixed     & Mistral 7B   & 0.71 & 0.48 & 0.63 & 0.83 \\
+Recursive & Llama 3.1 8B & \textbf{0.93} & 0.65 & 0.79 & 0.75 \\
+Recursive & Mistral 7B   & 0.77 & 0.53 & 0.75 & \textbf{0.90} \\
+Semantic  & Llama 3.1 8B & 0.91 & 0.70 & \textbf{0.80} & 0.75 \\
+Semantic  & Mistral 7B   & 0.77 & \textbf{0.71} & 0.63 & 0.81 \\
+\bottomrule
+\end{tabular}
+\caption{Generation metrics, taken from Table~\ref{tab:results}.}
+\label{tab:excerpt-generation}
+\end{table}
+
+The generation metrics: Faithfulness, Answer Relevancy, and Judge Correctness, show wider variation than the retrieval metrics and still divide along model lines, though far less sharply than in the retrieval scores.
+
+Semantic+Llama produced the best generation scores of all six configurations: Faithfulness 0.91, Answer Relevancy 0.70, Judge Correctness 0.80. It is the only configuration where all three generation metrics reach 0.70 or above. Recursive+Llama is close behind, with the single highest Faithfulness of any configuration (0.93) and a Judge Correctness of 0.79, trailing only on Answer Relevancy (0.65). Across the three chunking strategies, Llama scores 0.89--0.93 on Faithfulness, 0.58--0.70 on Answer Relevancy, and 0.73--0.80 on Judge Correctness.
+
+Mistral is well grounded but less precise. Its Faithfulness ranges from 0.71 to 0.77 across the three chunking strategies, consistently below Llama but far above the level that would indicate ungrounded generation, and its Judge Correctness ranges from 0.63 to 0.75. Mistral's answers remain shorter, reflected in its higher Conciseness (0.81--0.90), but the roughly 0.10-point gap to Llama on Correctness shows that brevity comes at some cost in factual completeness.
+
+The weakest single results are the Judge Correctness scores of 0.63 shared by Fixed+Mistral and Semantic+Mistral. In both cases the shortfall is driven by a small number of questions on which Mistral declined to answer although the clause was present, or quoted a topically adjacent clause rather than the exact one asked for.
+
+\subsection{Effect of Chunking Strategy}
+
+\begin{table}[ht]
+\centering
+\begin{tabular}{llccc}
+\toprule
+\textbf{LLM} & \textbf{Chunking} & \textbf{Faithfulness}
+  & \makecell{\textbf{Answer}\\\textbf{Relevancy}}
+  & \makecell{\textbf{Judge}\\\textbf{Correctness}} \\
+\midrule
+Llama 3.1 8B & Fixed     & 0.89 & 0.58 & 0.73 \\
+Llama 3.1 8B & Recursive & \textbf{0.93} & 0.65 & 0.79 \\
+Llama 3.1 8B & Semantic  & 0.91 & 0.70 & \textbf{0.80} \\
+\midrule
+Mistral 7B   & Fixed     & 0.71 & 0.48 & 0.63 \\
+Mistral 7B   & Recursive & 0.77 & 0.53 & 0.75 \\
+Mistral 7B   & Semantic  & 0.77 & \textbf{0.71} & 0.63 \\
+\bottomrule
+\end{tabular}
+\caption{Generation metrics from Table~\ref{tab:results}, grouped by language model so the effect of the chunking strategy can be read down each block.}
+\label{tab:excerpt-chunking}
+\end{table}
+
+For Llama, answer quality improves as chunking moves from fixed toward semantic. Answer Relevancy rises from 0.58 (fixed) to 0.65 (recursive) to 0.70 (semantic), and Judge Correctness from 0.73 to 0.79 to 0.80. Faithfulness peaks at recursive (0.93) and is essentially tied at semantic (0.91). This matches the theoretical expectation: recursive and semantic chunks respect sentence and topic boundaries, so the retrieved passage is more likely to consist of the relevant clause rather than a mix of the clause and surrounding boilerplate, and Llama generates more precise answers when the context is cleaner.
+
+For Mistral the picture is more mixed. Recursive chunking gives Mistral its best Judge Correctness (0.75) together with a Faithfulness of 0.77, while semantic chunking gives it its best Answer Relevancy (0.71) but a lower Correctness (0.63). Fixed chunking is the weakest for Mistral on every generation metric. 
+
+%Notably, semantic chunking is no longer harmful to Mistral: its Faithfulness on semantic chunks (0.77) matches its recursive result, indicating that the model draws on the longer topical passages rather than being overwhelmed by them.
+
+The best chunking strategy is therefore mildly model-dependent. Semantic chunking is the strongest choice for Llama across relevancy and correctness, whereas for Mistral recursive chunking offers the best balance of correctness and faithfulness, and at a fraction of the latency. A deployment that fixes the language model should tune the chunking strategy to match it.
+
+\subsection{Effect of Language Model}
+
+\begin{table}[ht]
+\centering
+\begin{tabular}{lcccc}
+\toprule
+\textbf{LLM} & \textbf{Faithfulness}
+  & \makecell{\textbf{Answer}\\\textbf{Relevancy}}
+  & \makecell{\textbf{Judge}\\\textbf{Correctness}}
+  & \makecell{\textbf{Latency}\\\textbf{(s)}} \\
+\midrule
+Llama 3.1 8B & \textbf{0.91} & \textbf{0.64} & \textbf{0.77} & 29.9 \\
+Mistral 7B   & 0.75 & 0.57 & 0.67 & \textbf{12.4} \\
+\midrule
+Difference   & 0.16 & 0.07 & 0.10 & 17.5 \\
+\bottomrule
+\end{tabular}
+\caption{Per-model means over the three chunking strategies, computed from Table~\ref{tab:results}.}
+\label{tab:excerpt-model}
+\end{table}
+
+Llama 3.1 8B outperforms Mistral 7B on the generation quality metrics in every chunking configuration, but the margin is much narrower than the raw parameter counts would suggest. Averaged across the three chunking strategies, the gap is approximately 0.16 points on Faithfulness (Llama 0.91 vs Mistral 0.75), 0.10 points on Judge Correctness (0.77 vs 0.67), and 0.07 points on Answer Relevancy (0.64 vs 0.57). Both models are well grounded in the retrieved context, the difference lies mainly in how completely and precisely each one extracts the answer.
+
+Mistral compensates with speed. It generates answers in 7-22 seconds depending on chunking strategy, compared to Llama's 10-65 seconds. For fixed and recursive chunking the difference is modest, Mistral runs in roughly 7 seconds and Llama in 10-15 seconds, but for semantic chunking Llama's 65 seconds is nearly three times slower than Mistral's 22 seconds.
+
+For a legal application where answer quality is the primary concern, Llama 3.1 8B is the better choice, with Semantic+Llama or Recursive+Llama giving the strongest results. If response time matters more than the last increment of accuracy, for example a high-volume screening tool that flags contracts for human review rather than providing relied-upon answers, Mistral with recursive chunking offers competitive correctness (0.75) at roughly half the latency.
+
+\subsection{Response Latency}
+
+\begin{table}[ht]
+\centering
+\begin{tabular}{llc}
+\toprule
+\textbf{Chunking} & \textbf{LLM} & \textbf{Latency (s)} \\
+\midrule
+Fixed     & Llama 3.1 8B & 14.6 \\
+Fixed     & Mistral 7B   & \textbf{7.4} \\
+Recursive & Llama 3.1 8B & 10.1 \\
+Recursive & Mistral 7B   & 7.5 \\
+Semantic  & Llama 3.1 8B & 64.9 \\
+Semantic  & Mistral 7B   & 22.4 \\
+\bottomrule
+\end{tabular}
+\caption{Mean response latency, taken from Table~\ref{tab:results}.}
+\label{tab:excerpt-latency}
+\end{table}
+
+Semantic chunking carries a clear latency penalty for Llama. Fixed and recursive configurations run in 10-15 seconds per query, whereas Semantic+Llama averages 65 seconds, roughly four to six times longer, with the slowest individual queries on the largest contracts exceeding 300 seconds. Semantic chunks are larger on average than fixed or recursive ones, and generation time scales with context length. The same effect is visible for Mistral, where semantic chunking raises latency from about 7 to 22 seconds, but the absolute numbers remain far more practical.
+
+Semantic+Llama is therefore awkward for an interactive setting: although its average response time is around a minute, the worst cases run for several minutes, which users would not tolerate in a live chat. It remains viable for batch processing, such as bulk contract analysis. For the real-time chat interface, Recursive+Llama offers the best balance of quality and speed, at roughly 10 seconds per query while retaining the highest Faithfulness of any configuration.
+
+\subsection{Token Consumption}
+
+Langfuse recorded the input and output token counts for every generation, each measured with the model's own tokenizer. The per-configuration averages are included in Table~\ref{tab:results}. Two patterns are visible.
+
+\begin{table}[ht]
+\centering
+\begin{tabular}{llcc}
+\toprule
+\textbf{Chunking} & \textbf{LLM} & \textbf{Input tokens} & \textbf{Output tokens} \\
+\midrule
+Fixed     & Llama 3.1 8B & 4{,}183 & 188 \\
+Fixed     & Mistral 7B   & 4{,}882 & \textbf{109} \\
+Recursive & Llama 3.1 8B & \textbf{2{,}489} & 207 \\
+Recursive & Mistral 7B   & 2{,}991 & 139 \\
+Semantic  & Llama 3.1 8B & 8{,}275 & 202 \\
+Semantic  & Mistral 7B   & 9{,}641 & 147 \\
+\bottomrule
+\end{tabular}
+\caption{Token counts per query, taken from Table~\ref{tab:results}.}
+\label{tab:excerpt-tokens}
+\end{table}
+
+Input token counts are governed by the chunking strategy rather than the model. Recursive configurations are the smallest at roughly 2{,}500 to 3{,}000 tokens per query, fixed configurations pass roughly 4{,}200 to 4{,}900, while semantic chunking passes 8{,}300 to 9{,}600, two to three times as many. A semantic chunk groups a whole topical section, so ten of them carry far more text than ten fixed-size or recursive chunks. This is the same factor behind semantic chunking's higher latency: a longer input takes the model longer to process.
+
+Output token counts divide along model lines. Llama generates roughly 190 to 210 tokens per answer against Mistral's 110 to 150, around one and a half times as many. This is the quantitative form of the difference described in the qualitative observations: Llama tends to quote supporting text more fully, whereas Mistral produces shorter, more direct answers. The gap holds across all three chunking strategies, so it reflects the model rather than the retrieved input.
+
+The input counts also differ slightly between the two models on identical retrieved text, for example 4{,}183 against 4{,}882 tokens for fixed chunking, because Llama and Mistral tokenize the same passage into a different number of tokens. Cross-model comparisons of token counts should therefore be read as approximate rather than exact.
+
+\subsection{Qualitative Observations}
+
+A recurring pattern in Llama's outputs is the inclusion of the retrieved excerpt header and surrounding chunk text in the answer. Even with the prompt instruction to quote only the minimal span that answers the question, Llama frequently emits the source filename in square brackets, followed by adjacent contract text, before the relevant clause. This behaviour explains the Answer Relevancy gap between Llama's fixed and recursive configurations on the one hand and its semantic configuration on the other: with fixed and recursive chunks the answer is correct but verbose, and the verbosity dilutes the relevancy signal. Semantic chunks contain less unrelated material to copy, which is consistent with Llama's highest Answer Relevancy under semantic chunking (0.70). Mistral exhibits the same tendency to a much lesser extent and produces shorter answers on average, which is reflected in its lower output token counts in Table~\ref{tab:results}.
+
+Faithfulness and correctness can diverge when retrieval returns an adjacent passage rather than the target clause. The model produces an answer grounded in what it was given, with no fabrication relative to the retrieved context, but factually wrong relative to the ground truth. Faithfulness on those responses stayed above 0.85 across all six configurations, while judge correctness fell to 0.25. The case shows that faithfulness alone is insufficient as a quality measure: a system can be perfectly faithful to the wrong context.
+
+%The NETGEAR distributor agreement illustrates this: the question on Cap On Liability returned an adjacent indemnification clause rather than the maximum-liability clause in the same section, and every configuration quoted the indemnification text as the answer.
+
+Judge conciseness scored the same correct refusal differently depending on the model's style. When a configuration produced \textit{``Not found: this contract does not appear to contain a [Category] clause''} on its own, the judge scored 1.0 conciseness. When the same refusal was preceded by the retrieved excerpt and a short explanation, as in most of Llama's correct refusals, the same correct outcome scored 0.5 to 0.75. Mistral's refusals were short and direct in nearly every case, which raised its conciseness on the unanswerable set. Llama's habit of citing the excerpt before refusing produced the opposite effect even when the conclusion itself was correct. This is a limitation of applying a general-purpose conciseness measure to a system that surfaces source evidence alongside its conclusions.
+
+\section{Unanswerable Questions}
+
+Six of the twenty questions correspond to clauses that are not present in the queried contracts (\texttt{is\_impossible=True}). Because there is no ground-truth answer text to compare against, these questions were excluded from the automated RAGAS and Judge Correctness calculations. Judge Conciseness was still computed automatically, but conciseness alone does not measure whether the model correctly declined to answer because a short hallucination sometimes scores as well as a short correct refusal.
+
+The six unanswerable questions were therefore evaluated manually. A response was coun\-ted as correct if it ultimately acknowledged that the requested clause was not present in the contract, even if it first discussed adjacent or topically related sections. This rule reflects how the system would be used in practice: surfacing nearby material for a human reviewer to consider is preferable to silently omitting it, provided the model does not falsely claim that the requested clause is present. A response was counted as incorrect if it treated an adjacent clause as the answer or if it concluded that the requested clause might exist when in fact it does not.
+
+Table~\ref{tab:unanswerable} shows the per-configuration results. Across all six configurations, the models handled 30 of 36 unanswerable questions correctly (average 5.0 of 6).
+
+\begin{table}[ht]
+\centering
 \begin{tabular}{llc}
 \toprule
 \textbf{Chunking} & \textbf{LLM} & \textbf{Correct / 6} \\
@@ -65,130 +240,68 @@ Fixed     & Llama 3.1 8B & 4 \\
 Fixed     & Mistral 7B   & 6 \\
 Recursive & Llama 3.1 8B & 5 \\
 Recursive & Mistral 7B   & 6 \\
-Semantic  & Llama 3.1 8B & 6 \\
+Semantic  & Llama 3.1 8B & 3 \\
 Semantic  & Mistral 7B   & 6 \\
 \bottomrule
 \end{tabular}
+\caption{Manual evaluation of the six unanswerable questions per configuration.}
+\label{tab:unanswerable}
 \end{table}
 
-The three failures came from Llama configurations, two of them on the Third Party Beneficiary question. All three failures share the same pattern: the retrieved excerpts contained legally adjacent material, and the model treated similarity in subject matter as a sufficient basis for a positive answer.
+All six failures came from Llama configurations; Mistral declined correctly on every unanswerable question in all three chunking strategies. The Llama failures share a common pattern: the retrieved excerpts contained legally adjacent material, an assignment clause for a Third Party Beneficiary question, or an indemnification clause for an Uncapped Liability question, and the model quoted or discussed that material as if it were responsive rather than concluding that the specific clause was absent. The effect is strongest under semantic chunking, where the larger topical passages give the model more adjacent text to latch onto: Semantic+Llama alone accounted for three of the six failures.
 
-Mistral handled every unanswerable question correctly in all three chunking configurations. Its tendency to produce shorter, more cautious responses worked in its favour here, since a short refusal is harder to dilute with adjacent clauses than a longer extractive answer. Llama's more elaborate response style, which improved its scores on answerable questions, made it more prone to constructing a partially supported argument when the correct answer was that the clause was absent.
-
-
-
-\section{Effect of Chunking Strategy}
-For Llama, moving from fixed to semantic chunking raises Faithfulness from 0.69 to 0.81 and Judge Correctness from 0.71 to 0.79. The gain in Answer Relevancy is larger, from 0.55 to 0.71. Recursive chunking sits between the two on most metrics. This pattern matches the theoretical expectation: semantic chunks group sentences by topic, so the retrieved passage is more likely to consist entirely of the relevant clause rather than a mix of the clause and surrounding boilerplate. Llama generates more precise answers when the context is cleaner.
-
-For Mistral, the pattern reverses. Semantic chunking produces the lowest Faithfulness score (0.46) of all six configurations. Mistral scores higher on fixed (0.51) and recursive (0.58) chunking — shorter, more constrained passages that leave less room for the model to drift from the retrieved content.
-
-The best chunking strategy is therefore model-dependent. Semantic chunking is clearly preferable when Llama is the generator but harmful when Mistral is used. A deployment decision that fixes the language model should adjust the chunking strategy accordingly.
-\section{Effect of Language Model}
-Llama 3.1 8B outperforms Mistral 7B on every generation quality metric in every chunking configuration. The average gap in Faithfulness across the three chunking strategies is approximately 0.18 points, in Judge Correctness approximately 0.25 points, and in Answer Relevancy approximately 0.20 points.
-
-Mistral compensates with speed. It generates answers in 13–14 seconds regardless of chunking strategy, compared to Llama's 13–148 seconds. For fixed and recursive chunking the difference is small — Mistral runs in 13 seconds and Llama in 19–30 seconds — but for semantic chunking Llama's 148 seconds is more than 11 times slower than Mistral's 52 seconds.
-
-For a legal application where answer quality is the primary concern, Llama 3.1 8B is the better choice. If response time matters more than accuracy — for example, a high-volume screening tool that flags contracts for human review rather than providing relied-upon answers — Mistral with recursive chunking offers reasonable retrieval quality at roughly a third of the generation cost.
-
-\section{Response Latency}
-Semantic chunking carries a significant latency penalty for Llama. Fixed and recursive configurations run in 19–30 seconds per query; semantic+Llama takes 148 seconds, nearly five times longer. Semantic chunks are larger on average than fixed or recursive ones, and generation time scales with context length. The same effect is visible for Mistral — semantic chunking raises its latency from 13 to 52 seconds — but the absolute numbers remain more practical.
-
-Semantic+Llama would be unusable in an interactive setting where users expect a response within a minute. It is viable for batch processing, such as overnight evaluation runs or bulk contract analysis, but it cannot be the default configuration for the real-time chat interface. For that use case, Fixed+Llama or Recursive+Llama offer the best balance of quality and speed.
-
-\section{Qualitative Observations}
-A recurring pattern in Llama's outputs is the inclusion of surrounding content from the retrieved chunk beyond what the question asked. When a passage contains a relevant clause alongside an unrelated table, address, or liability disclaimer, the model frequently quotes the entire passage rather than extracting the clause. This behaviour explains the Answer Relevancy gap between Llama's fixed/recursive and semantic configurations: with fixed and recursive chunks the answer is correct but verbose, and the verbosity dilutes the relevancy signal.
-
-Faithfulness and correctness can diverge when retrieval fails. If the retrieved passages do not contain the relevant clause, the model generates an answer that is faithful to what it was given — no fabrication relative to the retrieved context — but factually wrong relative to the ground truth. In one evaluation example involving a liability cap clause in the NETGEAR distributor agreement, the system retrieved an infringement limitations passage instead of the cap clause, and concluded that no cap existed. Faithfulness was high; correctness was not. This illustrates that faithfulness alone is insufficient as a quality measure: a system can be perfectly faithful to the wrong context.
-
-The conciseness metric behaved inconsistently for unanswerable questions. When the system correctly identified that a clause was not present, it typically showed the retrieved excerpts it searched before reaching its conclusion. The judge scored these responses as verbose and penalised conciseness, even when the behaviour was appropriate. This is a known limitation of applying a general-purpose conciseness measure to a system designed to show source evidence alongside its conclusions.
-
-\section{Memory Strategy Comparison}
-The automated evaluation runs each question in isolation, resetting conversation history before each turn. Both windowed and summary memory are therefore equivalent in that setting. To compare the two strategies in a realistic multi-turn scenario, a fixed sequence of seven questions was run manually through the Streamlit interface — six questions drawn from the CUAD annotations for a random contract that was chosen of the 510 contracts (Sphere 3D Corp consulting agreement), plus one question that references information from a turn before the memory context window.
-
-\subsection{Question Sequence}
-
-The six content questions covered the following CUAD categories: (1) contracting parties, (2) effective date, (3) expiration date of the initial term, (4) governing law, (5) consequences of failing to notify before the term ends, and (6) non-compete restrictions. The seventh question was a meta-question asking the model to recall the first question of the session and the answer it gave, without referencing the contract by name.
-
-Question 6 has \texttt{is\_impossible=True} in the CUAD annotations: the Sphere 3D Corp consulting agreement does not contain a non-compete clause. This question was included to verify that the model correctly declines to answer rather than fabricating a clause. 
-
-\subsection{Windowed Memory Results}
-
-Questions 1 through 6 were answered correctly under windowed memory ($k=5$). The retrieval query at each turn included the full contract filename, which the condense step reconstructed from conversation history, so retrieval remained contract-specific throughout the session (Figures~\ref{fig:memory1} and~\ref{fig:memory2}).
-
-\begin{figure}[h!]
-    \centering
-    \includegraphics[width=\textwidth]{figures/memory1.png}
-    \caption{Windowed memory session — questions 1 to 3.}
-    \label{fig:memory1}
-\end{figure}
-
-\begin{figure}[h!]
-    \centering
-    \includegraphics[width=\textwidth]{figures/memory2.png}
-    \caption{Windowed memory session — questions 4 to 6.}
-    \label{fig:memory2}
-\end{figure}
-
-\begin{figure}[h!]
-    \centering
-    \includegraphics[width=\textwidth]{figures/memory3.png}
-    \caption{Windowed memory failure at question 7. The model reports the effective date question as the first question asked, because question 1 (contracting parties) has been evicted from the $k=5$ window.}
-    \label{fig:memory3}
-\end{figure}
-
-The failure appeared at question 7 (Figure~\ref{fig:memory3}). At that point the conversation history contained six completed turns. The windowed buffer holds only the last five, so question 1 — "In the contract SPHERE3DCORP\_06\_24\_2020-EX-10.12-CONSULTING AGREEMENT, who are the parties in this agreement?" — had been evicted from the context window. When asked to recall the first question of the session, the model identified question 2 ("What is the effective date of this agreement?") as the first, because that was the oldest turn still present in its window. The actual first question and its answer were permanently lost.
-
-\newpage
-\subsection{Summary Memory Results}
-
-Under summary memory, the LLM maintains a running compressed summary of the full conversation after each turn. After question 1, the summary includes the fact that the user asked about the contracting parties and that the answer was GROUPE PARAMEUS CORP and Sphere 3D Corp. This summary is never truncated, it is updated incrementally and passed in full on every subsequent turn. When question 7 was asked under summary memory, the model correctly identified question 1 as the parties question and reproduced the correct answer, demonstrating that the information survived across all seven turns.
-
-\begin{figure}[h!]
-    \centering
-    \includegraphics[width=\linewidth]{figures/summary1.png}
-    \caption{Summary memory session — questions 1 to 3.}
-    \label{fig:placeholder}
-\end{figure}
-
-\begin{figure}[h!]
-    \centering
-    \includegraphics[width=\linewidth]{figures/summary2.png}
-    \caption{Summary memory session — questions 4 to 5.}
-    \label{fig:placeholder}
-\end{figure}
+This is the flip side of the answering style that helped on answerable questions. Mistral's shorter, more cautious responses worked in its favour here, since a brief refusal is harder to dilute with adjacent clauses than a longer extractive answer. Llama's more elaborate, commit-to-an-answer style, which raised its Faithfulness and Answer Relevancy on answerable questions, made it more prone to treating a partially related clause as the answer when the correct response was that the clause was absent. The two categories that produced almost all of the errors, Third Party Beneficiary and Uncapped Liability, are precisely those whose absence is hardest to confirm, because assignment and indemnification language is superficially similar to the requested provisions. The result is a modest trade-off: the configuration choices that maximise answer quality on answerable questions are also those most likely to over-answer when the clause is genuinely absent.
 
 
-\begin{figure}[h!]
-    \centering
-    \includegraphics[width=1\linewidth]{figures/summary3.png}
-    \caption{Summary memory session — questions 6 to 7.}
-    \label{fig:placeholder}
-\end{figure}
 
-\newpage
+%\section{Qualitative Observations}
+%A recurring pattern in Llama's outputs is the inclusion of surrounding content from the retrieved chunk beyond what the question asked. When a passage contains a relevant clause alongside an unrelated table, address, or liability disclaimer, the model frequently quotes the entire passage rather than extracting the clause. This behaviour explains the Answer Relevancy gap between Llama's fixed/recursive and semantic configurations: with fixed and recursive chunks the answer is correct but verbose, and the verbosity dilutes the relevancy signal.
 
-\subsection{Discussion}
+%Faithfulness and correctness can diverge when retrieval fails. If the retrieved passages do not contain the relevant clause, the model generates an answer that is faithful to what it was given. No fabrication relative to the retrieved context, but factually wrong relative to the ground truth. In one evaluation example involving a liability cap clause in the NETGEAR distributor agreement, the system retrieved an infringement limitations passage instead of the cap clause, and concluded that no cap existed. Faithfulness was high, correctness was not. This illustrates that faithfulness alone is insufficient as a quality measure: a system can be perfectly faithful to the wrong context.
 
-In a real case scenario, a user who wants to recall an earlier answer or question can simply scroll through the chat history in the interface. The test was done with this recall question to simply show the difference between the two memory window techniques. A more meaningful test is one where the model must retain context that the user stated about themselves, information that exists only in the conversation and cannot be retrieved from any document. To construct such a test, the first question of the session was modified to include a role declaration: "I am a lawyer representing the Consultant in this matter. In the contract SPHERE3DCORP\_06\_24\_2020-EX-10.12-CONSULTING AGREEMENT, who are the parties?". After five further questions covering the effective date, expiration, governing law, auto-renewal consequences, and non-compete restrictions, the seventh question asked: "Based on our conversation, which party am I representing, and what are their obligations if the company fails to give notice before the term ends?". This question cannot be answered by retrieval alone. The contract does not record who the user represents because that information exists only in Q1, which falls outside the windowed memory buffer at turn seven.
-
-Under windowed memory (Figure ~\ref{fig:windowfinal}), the model answered "you are representing the company" it completely lost the context of the party, it didn't even provide the company name. Q1 had been evicted from the buffer after six turns, and the model had no record of the role declaration. With no grounded context to draw from, it guessed incorrectly. The condense chain also failed to reconstruct the contract filename, producing a vague retrieval query with no contract reference and retrieving ten chunks from multiple contracts.
-
-\begin{figure}[h!]
-    \centering
-    \includegraphics[width=\linewidth]{figures/windowfinal.png}
-    \caption{Question 7 under windowed memory ($k=5$) — incorrect identification of the represented party.}
-    \label{fig:windowfinal}
-\end{figure}
-
-Under summary memory (Figure ~\ref{fig:summaryfinal}), the model identified GROUPE PARAMEUS CORP as the party being represented and described the auto-extension clause as the relevant obligation. The role declaration from Q1 had been captured in the running summary and remained available throughout the session. The condense chain, informed by the richer summary, also generated a precise retrieval query that included the full contract filename, retrieving four targeted chunks rather than ten mixed ones. The phrase "based on our conversation only" was added deliberately to prevent the model from inferring the role from contract content, isolating memory as the only possible source of the answer.
-
-\begin{figure}[h!]
-    \centering
-    \includegraphics[width=\linewidth]{figures/summaryfinal.png}
-    \caption{Question 7 under summary memory — correct identification of the consultant.}
-    \label{fig:summaryfinal}
-\end{figure}
-
-Windowed memory is simple and guarantees exact verbatim recall of recent turns, but it silently discards older context once the buffer is full. Summary memory avoids this by compressing rather than discarding, at the cost of losing fine-grained verbatim detail in older turns. For long legal sessions that may span many clauses of a single contract, summary memory is the more appropriate choice, since a user may reference a clause discussed several turns earlier without the system having lost all trace of it.
+%The conciseness metric behaved inconsistently for unanswerable questions. When the system correctly identified that a clause was not present, it typically showed the retrieved excerpts it searched before reaching its conclusion. The judge scored these responses as verbose and penalised conciseness, even when the behaviour was appropriate. This is a known limitation of applying a general-purpose conciseness measure to a system designed to show source evidence alongside its conclusions.
 
 
+
+
+\section{Comparison with Related Work}
+
+No prior study evaluates a retrieval-augmented pipeline on CUAD with the exact combination of metrics used in this thesis, four RAGAS metrics plus two LLM-as-a-Judge metrics, so a direct comparison against published numbers is not possible. The closest available works each overlap with a different part of this evaluation, and together they place the present results in context.
+
+\textbf{Model comparison.} The ContractEval benchmark \cite{contracteval2025} evaluates fifteen open-source and four proprietary language models on clause-level risk identification over CUAD, using direct prompting rather than retrieval and scoring with F1 and Jaccard similarity. ContractEval reports that larger open-source models do not reliably outperform smaller ones, a 14B model underperforming an 8B variant. This mirrors the present finding that the 7B Mistral is not weaker than the 8B Llama in a way that parameter count alone would explain, and that model behaviour rather than size drives the differences observed. ContractEval also defines a ``laziness'' metric measuring incorrect refusals, the mirror image of the failure mode seen here for Mistral, which occasionally declined an answerable question.
+
+%\textbf{Retrieval architecture.} The study \textit{Towards Reliable Retrieval in RAG Systems for Large Legal Datasets} \cite{reliableretrieval2025} examines retrieval and chunking on CUAD through the LegalBench-RAG benchmark, with tooling close to that used here (recursive character chunking, GPT-4o-mini, and an open-source embedding model). It identifies Document-Level Retrieval Mismatch, where the retriever selects chunks from the wrong source document because legal texts are lexically similar, as the central failure mode of legal RAG, and reports text-level retrieval precision and recall of roughly 0.11 and 0.42 when retrieving across the full corpus. The pipeline in this thesis sidesteps that failure mode by scoping every query to the named contract, which is why its Context Precision (0.91--0.95) and Context Recall (0.87--0.96) are far higher. The comparison is not like-for-like, but it shows that contract-scoped routing removes precisely the bottleneck that work identifies as critical.
+
+\textbf{RAGAS faithfulness.} An empirical evaluation of RAG architectures for policy document question answering \cite{policyrag2026}, which uses the same RAGAS Faithfulness metric over a different, non-legal corpus, reports an average Faithfulness of 0.80 for an advanced RAG configuration against 0.62 for a basic retrieve-then-generate baseline. The best configurations in this thesis reach comparable or higher Faithfulness (0.91-0.93 for Llama), indicating that the hybrid retrieval and contract-scoped routing used here produce grounding at least on par with independently reported advanced-RAG systems, albeit on a different domain.
+
+In summary, where comparison is possible the present system is consistent with the
+literature: its model-comparison trends match those of ContractEval and its faithfulness is in line with other RAGAS-evaluated pipelines.
+
+\section{No-Retrieval Baseline}
+
+To quantify the contribution of the retrieval component, both language models were run on the same 20-question sample with no retrieved context. The baseline prompt instructs the model to answer the question from its general legal knowledge alone, or to respond with \textit{``Not found"} if the answer requires reading the specific contract. RAGAS metrics are not applicable in this setting, so the comparison rests on Judge Correctness, Judge Conciseness, and latency.
+
+Table~\ref{tab:baseline} reports the baseline scores alongside the per-model average across the three RAG configurations.
+
+\begin{table}[ht]
+\centering
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Model} & \textbf{Judge Correctness} & \textbf{Judge Conciseness} & \textbf{Latency (s)} \\
+\midrule
+Llama 3.1 8B, baseline   & 0.36 & 0.73 & 10.5 \\
+Llama 3.1 8B, RAG (avg)  & 0.77 & 0.75 & 29.9 \\
+\midrule
+Mistral 7B, baseline     & 0.63 & 0.71 & 7.1  \\
+Mistral 7B, RAG (avg)    & 0.67 & 0.85 & 12.4 \\
+\bottomrule
+\end{tabular}
+\caption{No-retrieval baseline compared against the average of the three chunking configurations for each model.}
+\label{tab:baseline}
+\end{table}
+
+Without any contract text, each model is prompted to answer from general legal knowledge alone. Llama~3.1~8B reaches only 0.36 Judge Correctness in this setting: it either declines (``I am not provided with the contract details") or produces a plausible but generic description of where the requested clause usually appears, neither of which recovers the contract-specific facts the questions ask for. Adding retrieval raises its correctness to 0.77 on average across the three chunking configurations, a gain of roughly 0.41 points. This is the clearest single demonstration of the retrieval component's value: for the stronger generator, more than half of the RAG system's correctness comes from the retrieved context rather than from the model's parametric knowledge.
+
+Mistral~7B shows a much smaller gap, from 0.63 at baseline to 0.67 with retrieval. This narrow margin should not be read as retrieval being unimportant, it reflects two effects. First, Mistral's baseline answers are fluent, well-structured generic legal templates that list the kinds of clauses a lawyer would typically review, and the LLM-as-a-Judge, scoring correctness and completeness, awards such topically appropriate descriptions partial credit even though they contain no facts from the specific contract. The baseline figure of 0.63 therefore overstates how much Mistral actually knows about these contracts. Second, Mistral's RAG correctness is itself only 0.67, below Llama's 0.77, because it draws less effectively on the retrieved context, consistent with its lower Faithfulness in Table~\ref{tab:results}. The small baseline-to-RAG gap is thus a property of the weaker generator, which produces confident ungrounded text and then under-uses the context once it is supplied, not evidence that retrieval is unnecessary.
+
+Conciseness changes little between the two settings (0.73 to 0.75 for Llama, 0.71 to 0.85 for Mistral): the baseline answers are no shorter despite having no excerpts to quote, because both models pad their general-knowledge responses with structured lists. The baseline runs are nonetheless the fastest configurations, since they skip retrieval entirely (Llama 10.5~s, Mistral 7.1~s, below each model's RAG average), confirming that the additional time in the RAG configurations is spent on retrieval and on processing the larger context.

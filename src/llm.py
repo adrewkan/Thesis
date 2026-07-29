@@ -50,14 +50,14 @@ def load_llm(
     """
     Download (or load from cache) a local LLM and wrap it for LangChain.
 
-    4-bit NF4 quantization is on by default — it reduces memory from ~16 GB to
+    4-bit NF4 quantization is on by default - it reduces memory from ~16 GB to
     ~5 GB for an 8B model with negligible quality loss for extractive legal tasks.
 
     Args:
         model_key:      'llama' or 'mistral'
         quantize_4bit:  Use bitsandbytes NF4 quantization (requires CUDA)
         max_new_tokens: Maximum tokens to generate per answer
-        temperature:    Sampling temperature — keep low (0.1) for legal accuracy
+        temperature:    Sampling temperature - keep low (0.1) for legal accuracy
 
     Returns:
         A LangChain HuggingFacePipeline ready to use in a chain
@@ -77,7 +77,7 @@ def load_llm(
             "Set HF_TOKEN=<your_token> in your .env file."
         )
 
-    print(f"\nLoading '{model_key}' — {model_id}")
+    print(f"\nLoading '{model_key}' - {model_id}")
     _check_cuda()
 
     # ------------------------------------------------------------------ #
@@ -89,13 +89,13 @@ def load_llm(
         trust_remote_code=False,
     )
 
-    # Llama 3.1 has no pad token by default — required for batched generation
+    # Llama 3.1 has no pad token by default - required for batched generation
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
         tokenizer.pad_token_id = tokenizer.eos_token_id
 
     # ------------------------------------------------------------------ #
-    # Quantization config (4-bit NF4 — best quality-per-bit for LLMs)    #
+    # Quantization config (4-bit NF4 - best quality-per-bit for LLMs)    #
     # ------------------------------------------------------------------ #
     bnb_config = None
     if quantize_4bit:
@@ -148,7 +148,7 @@ def load_llm(
 
 
 if __name__ == "__main__":
-    # Quick sanity check — loads Mistral (smaller download) and runs one inference
+    # Quick sanity check - loads Mistral (smaller download) and runs one inference
     print("Loading Mistral for smoke test...")
     llm = load_llm("mistral", max_new_tokens=64)
     response = llm.invoke("What is a governing law clause in a contract?")

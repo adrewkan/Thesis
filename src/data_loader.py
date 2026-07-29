@@ -24,7 +24,6 @@ def load_local_contracts(data_dir="./data"):
     print("="*50)
     print(f"File source metadata: {docs[0].metadata['source']}")
     
-    # This is the crucial line we were missing!
     return docs
 
 if __name__ == "__main__":

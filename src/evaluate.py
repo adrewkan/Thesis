@@ -4,39 +4,43 @@ evaluate.py
 Batch RAGAS evaluation of RAG configurations against CUAD ground truth.
 
 Metrics computed per configuration:
-  - Faithfulness         : is the answer supported by the retrieved context?
-  - AnswerRelevancy      : is the answer relevant to the question asked?
-  - ContextPrecision     : are relevant chunks ranked higher? (= Context Relevance)
-  - ContextRecall        : do the retrieved chunks cover the ground truth?
-  - Judge Correctness    : LLM-as-a-Judge — does answer match ground truth? (0-1)
-  - Judge Conciseness    : LLM-as-a-Judge — is the answer focused? (0-1)
+  - Faithfulness      : is the answer supported by the retrieved context?
+  - AnswerRelevancy   : is the answer relevant to the question asked?
+  - ContextPrecision  : are relevant chunks ranked higher?
+  - ContextRecall     : do the retrieved chunks cover the ground truth?
+  - Judge Correctness : LLM-as-a-Judge, does the answer match ground truth? (0-1)
+  - Judge Conciseness : LLM-as-a-Judge, is the answer focused? (0-1)
 
-Each configuration is one combination of:
-  chunking  ∈ {fixed, recursive, semantic}
-  model     ∈ {llama, mistral}
-  memory    ∈ {windowed, summary}
+The automated evaluation compares 3 chunking strategies against 2 language
+models, giving 6 configurations:
+  chunking : fixed, recursive, semantic
+  model    : llama, mistral
+Memory type (windowed, summary) is selectable but does not change the automated
+scores, because each question runs in isolation with the memory cleared first.
 
 Output files (written to results/):
-  eval_results_<timestamp>.csv   — per-question rows for every config
-  eval_summary_<timestamp>.csv   — one aggregated row per config
+  eval_results_<timestamp>.csv   per-question rows for every config
+  eval_summary_<timestamp>.csv   one aggregated row per config
 
 Usage (inside Docker):
     # Single config
     python src/evaluate.py \\
         --cuad_json data/CUADv1.json \\
         --chunking recursive --model llama --memory windowed \\
-        --sample 100
+        --sample 20 --eval_model openai
 
-    # All 12 configs sequentially
-    python src/evaluate.py --cuad_json data/CUADv1.json --all_configs --sample 100
+    # Every chunking/model combination in sequence
+    python src/evaluate.py --cuad_json data/CUADv1.json --all_configs --sample 20 --eval_model openai
 
 Requirements:
-    - CUAD JSON at data/CUADv1.json  (download from the CUAD GitHub repo or
-      HuggingFace: theatricusproject/cuad)
-    - OPENAI_API_KEY in .env for the RAGAS LLM evaluator (gpt-4o-mini is used
-      by default — cheap and sufficient).  If the key is absent, the script
-      falls back to NonLLMContextRecall (no LLM needed for that metric) and
-      skips Faithfulness / ResponseRelevancy.
+    - CUAD JSON at data/CUADv1.json (from the CUAD GitHub repo or the
+      HuggingFace dataset theatricusproject/cuad).
+    - An evaluator LLM for RAGAS and LLM-as-a-Judge, chosen with --eval_model
+      or auto-detected from the API keys in .env:
+        openai : gpt-4o-mini, needs OPENAI_API_KEY (used for the thesis results)
+        nvidia : Llama 3.1 70B via NVIDIA NIM, needs NVIDIA_API_KEY
+        local  : the same HuggingFace model as --model, no API key
+        rouge  : no LLM; RAGAS and the judge are skipped, only ROUGE-L is used
 """
 
 from __future__ import annotations
@@ -132,19 +136,21 @@ def build_ragas_metrics(eval_model: str, model_key: str = "llama"):
     """
     Return (metrics_list, use_ragas).
 
-    Uses the RAGAS 0.2.x class-based API.
+    Uses the RAGAS 0.4.x class-based API.
 
     eval_model:
-      "openai" — GPT-4o-mini evaluator (requires OPENAI_API_KEY in .env).
-                 Most reliable for structured JSON verdicts RAGAS needs.
-      "local"  — Same local HuggingFace model used for RAG answers (no API key).
-                 7B/8B models occasionally produce malformed JSON so some scores
-                 may come back as None — that is expected, not a bug.
-      "rouge"  — Skip RAGAS entirely; fall back to ROUGE-L only.
+      "openai" : gpt-4o-mini evaluator (requires OPENAI_API_KEY in .env).
+                 Most reliable for the structured JSON verdicts RAGAS needs,
+                 and the evaluator used for the thesis results.
+      "nvidia" : Llama 3.1 70B via NVIDIA NIM (requires NVIDIA_API_KEY);
+                 embeddings stay local with all-MiniLM-L6-v2.
+      "local"  : the same local HuggingFace model used for the RAG answers
+                 (no API key). 7B/8B models occasionally emit malformed JSON,
+                 so some scores can come back as None.
+      "rouge"  : skip RAGAS entirely and use ROUGE-L only.
 
-    Metrics match thesis section 2.4:
-      Faithfulness, AnswerRelevancy, ContextPrecision (= "Context Relevance"),
-      ContextRecall.
+    Computes the four RAGAS metrics: Faithfulness, AnswerRelevancy,
+    ContextPrecision, and ContextRecall.
     """
     from ragas.metrics import Faithfulness, AnswerRelevancy, ContextPrecision, ContextRecall
     from ragas.llms import LangchainLLMWrapper
@@ -159,14 +165,14 @@ def build_ragas_metrics(eval_model: str, model_key: str = "llama"):
         print("  [RAGAS] Evaluator: gpt-4o-mini (OpenAI)")
 
     elif eval_model == "nvidia":
-        # NVIDIA NIM — OpenAI-compatible API, free credits at build.nvidia.com
+        # NVIDIA NIM - OpenAI-compatible API, free credits at build.nvidia.com
         # Uses a 70B model for reliable structured JSON output in RAGAS.
-        # Embeddings stay local (all-MiniLM-L6-v2) — no extra API needed.
+        # Embeddings stay local (all-MiniLM-L6-v2) - no extra API needed.
         from langchain_openai import ChatOpenAI
         from langchain_huggingface import HuggingFaceEmbeddings
         nvidia_key = os.getenv("NVIDIA_API_KEY")
         if not nvidia_key:
-            print("  WARNING: NVIDIA_API_KEY not set — falling back to local evaluator.")
+            print("  WARNING: NVIDIA_API_KEY not set - falling back to local evaluator.")
             eval_model = "local"
         else:
             nvidia_model = os.getenv("NVIDIA_EVAL_MODEL", "meta/llama-3.1-70b-instruct")
@@ -207,7 +213,7 @@ def build_ragas_metrics(eval_model: str, model_key: str = "llama"):
             HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
         )
     elif eval_model == "rouge":
-        print("  [RAGAS] eval_model=rouge — skipping RAGAS, using ROUGE-L only.")
+        print("  [RAGAS] eval_model=rouge - skipping RAGAS, using ROUGE-L only.")
         return [], False
 
     metrics = [
@@ -226,9 +232,8 @@ def build_ragas_metrics(eval_model: str, model_key: str = "llama"):
 _BASELINE_PROMPT = """\
 You are a legal assistant. Answer the following question about a commercial contract \
 based on your general legal knowledge.
-If you do not know the answer or it cannot be determined without reading the contract, \
-respond with exactly: "Not found."
-Be concise. Quote relevant text where possible.
+If you do not know the answer, respond with exactly: "Not found."
+Be concise.
 
 Question: {question}"""
 
@@ -240,7 +245,7 @@ def run_baseline(
     """
     Run every question through the LLM with NO retrieval context.
 
-    This is the section 2.6 baseline — the LLM answers from its own training
+    This is the section 2.6 baseline - the LLM answers from its own training
     knowledge, with no contract chunks provided.  Comparing judge_correctness
     and rouge_l against the RAG results quantifies how much retrieval helps.
 
@@ -334,7 +339,7 @@ def run_config(
             out = chain.chat(eval_question)
             latency = time.perf_counter() - t0
             results.append({
-                "question":            qa["question"],   # original — used by RAGAS
+                "question":            qa["question"],   # original - used by RAGAS
                 "ground_truth":        qa["ground_truth"],
                 "is_impossible":       qa["is_impossible"],
                 "contract_title":      qa["contract_title"],
@@ -342,6 +347,8 @@ def run_config(
                 "contexts":            [d.page_content for d in out["source_documents"]],
                 "standalone_question": out["standalone_question"],
                 "latency_s":           round(latency, 2),
+                "input_tokens":        out.get("input_tokens"),
+                "output_tokens":       out.get("output_tokens"),
             })
         except Exception as exc:
             latency = time.perf_counter() - t0
@@ -355,6 +362,8 @@ def run_config(
                 "contexts":       [],
                 "standalone_question": "",
                 "latency_s":      round(latency, 2),
+                "input_tokens":   None,
+                "output_tokens":  None,
             })
 
         if i % 10 == 0:
@@ -391,7 +400,7 @@ def ragas_evaluate(results: list[dict], metrics: list, use_ragas: bool) -> list[
     If use_ragas=False: computes ROUGE-L between answer and ground truth locally.
 
     Impossible questions (is_impossible=True) are skipped for all RAGAS metrics
-    — RAGAS is not designed for negative questions (empty ground truth causes
+    - RAGAS is not designed for negative questions (empty ground truth causes
     context_recall=0 and context_precision=0 which unfairly drag down averages).
     """
     if use_ragas:
@@ -405,7 +414,7 @@ def ragas_evaluate(results: list[dict], metrics: list, use_ragas: bool) -> list[
 
         # Pre-set all impossible questions to None
         impossible_indices = [i for i, r in enumerate(results) if r.get("is_impossible")]
-        # (metric cols not known yet — will be set after first evaluation)
+        # (metric cols not known yet - will be set after first evaluation)
 
         if answerable:
             samples = [
@@ -521,7 +530,7 @@ def build_judge_llm(eval_model: str, model_key: str = "llama"):
     if eval_model == "openai":
         from langchain_openai import ChatOpenAI
         return ChatOpenAI(model="gpt-4o-mini", temperature=0)
-    # local — same model that ran the RAG answers
+    # local - same model that ran the RAG answers
     from llm import load_llm
     return load_llm(model_key)
 
@@ -541,7 +550,7 @@ def _judge_call(llm, prompt: str, label: str, retries: int = 3) -> float | None:
             msg = str(e)
             if "429" in msg and attempt < retries - 1:
                 wait = 60 * (2 ** attempt)   # 60 s, 120 s
-                print(f"    [Judge] 429 on {label} — waiting {wait}s …")
+                print(f"    [Judge] 429 on {label} - waiting {wait}s ...")
                 time.sleep(wait)
             else:
                 print(f"    [Judge] {label} error: {e}")
@@ -574,7 +583,7 @@ def judge_evaluate(
             r["judge_conciseness"] = None
         return results
 
-    print(f"  [Judge] Loading judge LLM ({eval_model}) …")
+    print(f"  [Judge] Loading judge LLM ({eval_model}) ...")
     llm = build_judge_llm(eval_model, model_key)
 
     for i, r in enumerate(results, 1):
@@ -585,7 +594,7 @@ def judge_evaluate(
         if not answer or answer.startswith("ERROR"):
             continue
 
-        # ── Correctness (answerable questions only) ──────────────────────
+        # -- Correctness (answerable questions only) ----------------------
         if not r.get("is_impossible") and r.get("ground_truth"):
             prompt = _CORRECTNESS_PROMPT.format(
                 question=r["question"],
@@ -595,7 +604,7 @@ def judge_evaluate(
             r["judge_correctness"] = _judge_call(llm, prompt, f"correctness Q{i}")
             time.sleep(call_delay)
 
-        # ── Conciseness (all non-error answers) ──────────────────────────
+        # -- Conciseness (all non-error answers) --------------------------
         prompt = _CONCISENESS_PROMPT.format(
             question=r["question"],
             answer=answer[:1000],
@@ -622,6 +631,7 @@ def write_results_csv(all_rows: list[dict], path: Path):
         "question_id", "contract_title", "is_impossible",
         "question", "ground_truth", "answer",
         "standalone_question", "latency_s",
+        "input_tokens", "output_tokens",
         "faithfulness", "answer_relevancy", "context_precision", "context_recall", "rouge_l",
         "judge_correctness", "judge_conciseness",
     ]
@@ -629,7 +639,7 @@ def write_results_csv(all_rows: list[dict], path: Path):
         writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
         writer.writeheader()
         writer.writerows(all_rows)
-    print(f"\nResults saved → {path}")
+    print(f"\nResults saved -> {path}")
 
 
 def write_summary_csv(summary_rows: list[dict], path: Path):
@@ -641,7 +651,7 @@ def write_summary_csv(summary_rows: list[dict], path: Path):
         writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
         writer.writeheader()
         writer.writerows(summary_rows)
-    print(f"Summary saved  → {path}")
+    print(f"Summary saved  -> {path}")
 
 
 def aggregate(rows: list[dict], metric_keys: list[str]) -> dict[str, Any]:
@@ -683,7 +693,7 @@ def main():
         "--eval_model", choices=["openai", "nvidia", "local", "rouge"], default=None,
         help=(
             "RAGAS evaluator LLM: "
-            "'nvidia' (Llama 3.1 70B via NVIDIA NIM, needs NVIDIA_API_KEY — recommended), "
+            "'nvidia' (Llama 3.1 70B via NVIDIA NIM, needs NVIDIA_API_KEY - recommended), "
             "'openai' (gpt-4o-mini, needs OPENAI_API_KEY), "
             "'local' (same HuggingFace model as --model, no API key), "
             "'rouge' (ROUGE-L only, no LLM). "
@@ -695,7 +705,7 @@ def main():
     parser.add_argument(
         "--judge_only", metavar="RESULTS_CSV",
         help=(
-            "Path to an existing eval_results CSV. Skips RAG chain and RAGAS — "
+            "Path to an existing eval_results CSV. Skips RAG chain and RAGAS - "
             "re-runs only LLM-as-a-Judge on the saved answers and overwrites the file."
         ),
     )
@@ -722,7 +732,7 @@ def main():
             args.eval_model = "local"
         print(f"  [RAGAS] Auto-selected eval_model: {args.eval_model}")
 
-    # ── Judge-only mode: re-score an existing results CSV ────────────────
+    # -- Judge-only mode: re-score an existing results CSV ----------------
     if args.judge_only:
         csv_path = Path(args.judge_only)
         if not csv_path.is_absolute():
@@ -731,7 +741,7 @@ def main():
             print(f"ERROR: results CSV not found at {csv_path}")
             sys.exit(1)
 
-        print(f"Judge-only mode — loading {csv_path}")
+        print(f"Judge-only mode - loading {csv_path}")
         with open(csv_path, newline="", encoding="utf-8") as f:
             rows = list(csv.DictReader(f))
 
@@ -773,7 +783,7 @@ def main():
         sys.exit(1)
 
     # Load & sample questions
-    print(f"Loading CUAD from {cuad_path} …")
+    print(f"Loading CUAD from {cuad_path} ...")
     all_records = load_cuad(str(cuad_path))
     print(f"  Total QA pairs: {len(all_records)}")
     questions = sample_questions(all_records, args.sample, seed=args.seed)
@@ -781,10 +791,10 @@ def main():
           f"({sum(1 for q in questions if not q['is_impossible'])} answerable, "
           f"{sum(1 for q in questions if q['is_impossible'])} impossible)")
 
-    # ── Baseline mode (section 2.6): LLM only, no retrieval ──────────────
+    # -- Baseline mode (section 2.6): LLM only, no retrieval --------------
     if args.baseline:
         print(f"\n{'='*60}")
-        print(f"LLM-only baseline — model={args.model}")
+        print(f"LLM-only baseline - model={args.model}")
         print(f"{'='*60}")
 
         raw = run_baseline(model_key=args.model, questions=questions)
@@ -793,7 +803,7 @@ def main():
         for r in raw:
             r["rouge_l"] = _rouge_l(r["answer"], r["ground_truth"])
 
-        # Judge (correctness + conciseness) — no RAGAS since there's no context
+        # Judge (correctness + conciseness) - no RAGAS since there's no context
         if args.eval_model == "local":
             import gc, torch
             gc.collect()
@@ -828,7 +838,8 @@ def main():
         ["judge_correctness", "judge_conciseness"]
         if args.eval_model != "rouge" else []
     )
-    metric_keys = ragas_metric_keys + judge_metric_keys
+    token_metric_keys = ["input_tokens", "output_tokens"]
+    metric_keys = ragas_metric_keys + judge_metric_keys + token_metric_keys
 
     # Configurations to run
     if args.all_configs:
@@ -859,19 +870,19 @@ def main():
         )
 
         # For local eval: free the RAG chain's GPU memory before loading the
-        # evaluator LLM — both are 8B models and won't fit in VRAM simultaneously.
+        # evaluator LLM - both are 8B models and won't fit in VRAM simultaneously.
         if args.eval_model == "local":
             import gc, torch
             gc.collect()
             torch.cuda.empty_cache()
-            print("  GPU memory freed — loading evaluator LLM …")
+            print("  GPU memory freed - loading evaluator LLM ...")
 
         metrics, use_ragas = build_ragas_metrics(
             eval_model=args.eval_model,
             model_key=model_key,
         )
 
-        print("  Running RAGAS evaluation …")
+        print("  Running RAGAS evaluation ...")
         scored = ragas_evaluate(raw_results, metrics, use_ragas)
 
         # Free RAGAS evaluator LLM before judge LLM loads (local mode only)
@@ -881,7 +892,7 @@ def main():
             gc.collect()
             torch.cuda.empty_cache()
 
-        print("  Running LLM-as-a-Judge evaluation …")
+        print("  Running LLM-as-a-Judge evaluation ...")
         scored = judge_evaluate(scored, eval_model=args.eval_model, model_key=model_key)
 
         # Free judge LLM before next config's RAG chain loads

@@ -10,12 +10,14 @@
 \usepackage{multicol}
 \usepackage{multirow}
 \usepackage[table]{xcolor}
+\usepackage{makecell}
 \usepackage{caption} 
 \captionsetup[table]{skip=10pt}
 \usepackage{tikz}
 \usepackage{datetime}
 \usepackage{ifthen}
 \usepackage{hyperref} % Για ενεργά URLs
+
 
 % Πρόσθετοι ορισμοί, ανάλογα με το κείμενο της διπλωματικής
 % typeset source code
@@ -104,6 +106,7 @@
     \include{chapter4}
     \include{chapter5}
     \include{chapter6}
+    \include{chapter7}
     %\include{chapter...} % προσθέστε όσα χρειάζεται
     \include{chapter_last}
 %
@@ -115,42 +118,6 @@
 	\bibliography{references}
 
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%% APPENDICES (optional) / ΠΑΡΑΡΤΗΜΑΤΑ (ΠΡΟΑΙΡΕΤΙΚΑ)
-%%
-
-% Εάν υπάρχουν περισσότερα από ένα Παραρτήματα
-% είναι ενεργή η ακόλουθη εντολή
-% και ανενεργή για μεμονωμένο Παράρτημα
-    \include{appendices}
-
-% Μην τροποποιήσετε τις ακόλουθες εντολές
-\ifgrthesisoption
-    \renewcommand{\chaptername}{Παράρτημα}
-\else
-    \renewcommand{\chaptername}{Appendix}
-\fi
-
-% Πριν το κάθε Παράρτημα (για περισσότερα από ένα), 
-% ρυθμίζεται η κατάλληλη αλφαβητική αρίθμηση
-    \renewcommand{\thechapter}{A} 
-  	\include{appA}	
-% %	
-    \renewcommand{\thechapter}{B}
-    \include{appB}
-
-% Εάν υπάρχει μόνο ένα Παράρτημα,
-% μπαίνουν σε σχόλια οι παραπάνω γραμμές 
-% και ρυθμίζεται αρίθμηση χωρίς γράμμα
-%   \renewcommand{\thechapter}{} 
-%   \renewcommand{\thesection}{\arabic{section}}
-%
-% Ακολουθεί αρχείο μεμονωμένου Παραρτήματος
-% (διαφορετική δομή από appA/appΒ)
-%   \include{single_app} 
-
-%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 
 \end{document}

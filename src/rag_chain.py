@@ -9,7 +9,7 @@ Each RAGChain instance pairs:
   - A memory strategy (one of: windowed / summary)
 
 This covers all experimental dimensions from the thesis:
-  3 chunking × 2 LLMs × 2 memory types = 12 configurations total.
+  3 chunking x 2 LLMs x 2 memory types = 12 configurations total.
 
 Usage:
     from retriever import get_retriever
@@ -35,7 +35,7 @@ from langchain_core.output_parsers import StrOutputParser
 
 
 # ---------------------------------------------------------------------------
-# Langfuse client — initialised once, None if keys are missing
+# Langfuse client - initialised once, None if keys are missing
 # ---------------------------------------------------------------------------
 
 _langfuse = None
@@ -71,9 +71,6 @@ def _get_langfuse():
 # clause in the contract previously discussed?"
 CONDENSE_PROMPT = ChatPromptTemplate.from_messages([
     ("system",
-     # Original: "You are a helpful assistant. Your only task is to rephrase a follow-up "
-     # "question into a standalone question that can be understood without the "
-     # "conversation history. Output only the rephrased question, nothing else."
      "You are a helpful assistant. Your only task is to rephrase a follow-up "
      "question into a standalone question that can be understood without the "
      "conversation history. Output only the rephrased question, nothing else. "
@@ -86,7 +83,7 @@ CONDENSE_PROMPT = ChatPromptTemplate.from_messages([
      "Standalone question:"),
 ])
 
-# Main QA prompt — system message carries the instructions, human message
+# Main QA prompt - system message carries the instructions, human message
 # carries the context + question.  Using ChatPromptTemplate ensures the model
 # receives its own native chat tokens (Llama's <|begin_of_text|> / <|eot_id|>,
 # Mistral's [INST]...[/INST]) so it knows exactly where to start and stop.
@@ -111,30 +108,36 @@ QA_PROMPT = ChatPromptTemplate.from_messages([
      "- For 'Governing Law': quote the clause stating which state/country law applies.\n"
      "- For 'Expiration Date' or 'Renewal Term': quote termination or renewal clauses "
      "even if they do not use the word 'expiration'.\n\n"
-     "IF THE CLAUSE DOES NOT EXIST: If the excerpts contain no text related to "
-     "the requested category, respond with exactly: "
+     "WHEN TO ANSWER VS. DECLINE: Reply with "
      "'Not found: this contract does not appear to contain a [CATEGORY] clause.' "
-     "Do NOT speculate, infer, or paraphrase unrelated sections.\n\n"
-     "For any date question, read the contract body text, not the filename.\n\n"
-     # Original ending: "Be concise. Stop after answering."
-     "ANSWER FORMAT RULES:\n"
-     "- Answer ONLY what the question asks. Do not add details the question did not request.\n"
-     "- Do NOT reproduce or quote contract excerpts in your answer. State the answer in your own words.\n"
-     "- Do NOT add unsolicited commentary, recommendations, or explanations.\n"
-     "- Stop as soon as the question is fully answered."),
+     "ONLY when the excerpts contain no clause related to the category at all. "
+     "If a related clause IS present but does not state the exact value asked for "
+     "(for example a specific date, amount, or duration), still QUOTE that clause "
+     "as the answer -- do not decline just because a precise value is missing. "
+     "Do NOT speculate, infer, or paraphrase unrelated sections. "
+     "ANSWER DIRECTLY: when a relevant clause is present, lead with it and commit "
+     "to it as the answer. Do NOT hedge with phrases such as 'it is not explicitly "
+     "stated', 'this could potentially', 'this might be relevant', or 'a lawyer "
+     "should review to determine whether this qualifies', and do NOT list several "
+     "possibly-relevant clauses with uncertainty -- give the single most relevant "
+     "quote. Evasive, non-committal phrasing makes an otherwise correct answer "
+     "score as no answer at all. "
+     "KEEP THE ANSWER FOCUSED: quote only the minimal span that answers the "
+     "question -- the specific sentence or clause -- not the whole excerpt. Leave "
+     "out surrounding material such as tables, addresses, section headers, or "
+     "unrelated disclaimers that happen to appear in the same excerpt. After the "
+     "quote, do NOT add explanation, commentary, or recommendations. "
+     "Be concise. Stop after answering."),
     ("human",
      "Contract Excerpts:\n{context}\n\n"
      "Conversation History:\n{chat_history}\n\n"
      "Question: {question}"),
 ])
 
-# Prompt for the summary memory strategy — compresses conversation history
+# Prompt for the summary memory strategy - compresses conversation history
 # while preserving key legal facts (clause names, parties, dates, etc.)
 SUMMARY_PROMPT = ChatPromptTemplate.from_messages([
     ("system",
-     # Original: "You are a helpful assistant that summarizes legal Q&A conversations. "
-     # "Keep summaries concise but preserve key legal details: clause names, "
-     # "party names, dates, and obligations. Output only the updated summary."
      "You are a helpful assistant that summarizes legal Q&A conversations. "
      "Structure the summary as a numbered list of exchanges: "
      "'Q1: [what the user asked] → A1: [what you answered]. Q2: ...' and so on. "
@@ -196,12 +199,16 @@ class RAGChain:
         self.k_messages = k_messages
         self._trace_metadata = trace_metadata or {}
 
-        # Full turn-by-turn history — always kept regardless of memory type
+        # Full turn-by-turn history - always kept regardless of memory type
         # so callers can inspect the complete conversation
         self._history: list[tuple[str, str]] = []
 
-        # Running summary text — updated after each turn in summary mode
+        # Running summary text - updated after each turn in summary mode
         self._summary: str = ""
+
+        # Cache of every chunk in this chain's vector store, pulled once and
+        # reused for contract-scoped BM25 (see _get_all_docs).
+        self._all_docs_cache = None
 
         self._parser = StrOutputParser()
 
@@ -215,23 +222,23 @@ class RAGChain:
 
         Steps:
           1. Build the chat history string from memory
-          2. Condense the follow-up question → standalone retrieval query
+          2. Condense the follow-up question -> standalone retrieval query
           3. Retrieve relevant contract chunks
           4. Generate an answer grounded in the retrieved context
           5. Update memory (windowed: automatic; summary: LLM call)
 
         Returns:
-            answer            : str   — the LLM's answer
-            source_documents  : list  — retrieved LangChain Documents
-            standalone_question: str  — the reformulated query used for retrieval
-            chat_history_used : str   — the history string passed to the LLM
+            answer            : str   - the LLM's answer
+            source_documents  : list  - retrieved LangChain Documents
+            standalone_question: str  - the reformulated query used for retrieval
+            chat_history_used : str   - the history string passed to the LLM
         """
         lf = _get_langfuse()
         trace_id = lf.create_trace_id() if lf else None
 
         chat_history = self._get_chat_history()
 
-        # Step 1: Condense follow-up question → standalone query
+        # Step 1: Condense follow-up question -> standalone query
         standalone_q = self._condense_question(question, chat_history)
 
         # Step 2: Retrieve relevant contract chunks
@@ -256,7 +263,20 @@ class RAGChain:
         if self.memory_type == "summary":
             self._update_summary(question, answer)
 
-        # Step 5: Log trace to Langfuse (Langfuse SDK v4 API)
+        # Step 5: Count tokens (always - used for both Langfuse and CSV).
+        # ChatHuggingFace(llm=HuggingFacePipeline(pipeline=pipe)) - the real
+        # HF pipeline is two layers in.
+        input_tokens = None
+        output_tokens = None
+        try:
+            tokenizer = self.llm.llm.pipeline.tokenizer
+            prompt_text = context + "\n" + chat_history + "\n" + question
+            input_tokens = len(tokenizer.encode(prompt_text))
+            output_tokens = len(tokenizer.encode(answer))
+        except Exception as exc:
+            print(f"  [tokens] counting failed: {exc}")
+
+        # Step 6: Log trace to Langfuse (Langfuse SDK v4 API)
         if lf and trace_id:
             try:
                 root = lf.start_observation(
@@ -284,17 +304,6 @@ class RAGChain:
                     },
                 ).end()
 
-                usage_details: dict = {}
-                try:
-                    tokenizer = self.llm.pipeline.tokenizer
-                    prompt_text = context + "\n" + chat_history + "\n" + question
-                    usage_details = {
-                        "input":  len(tokenizer.encode(prompt_text)),
-                        "output": len(tokenizer.encode(answer)),
-                    }
-                except Exception:
-                    pass
-
                 gen_kwargs: dict = {
                     "name":     "llm-generation",
                     "as_type":  "generation",
@@ -303,8 +312,11 @@ class RAGChain:
                     "model":    self._trace_metadata.get("model", "unknown"),
                     "metadata": {"latency_s": round(gen_latency, 3)},
                 }
-                if usage_details:
-                    gen_kwargs["usage_details"] = usage_details
+                if input_tokens is not None and output_tokens is not None:
+                    gen_kwargs["usage_details"] = {
+                        "input":  input_tokens,
+                        "output": output_tokens,
+                    }
 
                 root.start_observation(**gen_kwargs).end()
                 root.update(output=answer).end()
@@ -317,6 +329,8 @@ class RAGChain:
             "source_documents": docs,
             "standalone_question": standalone_q,
             "chat_history_used": chat_history,
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
         }
 
     def clear_memory(self):
@@ -382,7 +396,7 @@ class RAGChain:
         for phrase in self._FALLBACK_PHRASES:
             if phrase in answer:
                 before = answer[: answer.index(phrase)].strip()
-                if before:           # real content exists → drop the trailing phrase
+                if before:           # real content exists -> drop the trailing phrase
                     return before
         return answer
 
@@ -399,9 +413,9 @@ class RAGChain:
         re.IGNORECASE | re.DOTALL,
     )
 
-    # Legal synonyms per CUAD category — appended to BM25 queries only.
+    # Legal synonyms per CUAD category - appended to BM25 queries only.
     # Bridges the gap between category names and how clauses are actually worded
-    # in contracts (e.g. "Expiration Date" → contracts say "terminate upon notice").
+    # in contracts (e.g. "Expiration Date" -> contracts say "terminate upon notice").
     _CUAD_SYNONYMS: dict[str, str] = {
         "Expiration Date":                   "terminate termination expire end of term notice period duration",
         "Renewal Term":                      "renew renewal extension automatic continuation evergreen",
@@ -445,7 +459,7 @@ class RAGChain:
           "Highlight the parts (if any) of this contract related to
            "<Category>" that should be reviewed by a lawyer. Details: ..."
 
-        The boilerplate ("Highlight the parts…reviewed by a lawyer") adds noise
+        The boilerplate ("Highlight the parts...reviewed by a lawyer") adds noise
         to embedding similarity without adding meaning. Keeping only the clause
         category name and the Details description gives the vector store a much
         cleaner signal.
@@ -467,7 +481,7 @@ class RAGChain:
         """
         Extend the focused retrieval query with legal synonyms for BM25 search.
 
-        BM25 is a keyword matcher — it can't bridge vocabulary gaps on its own.
+        BM25 is a keyword matcher - it can't bridge vocabulary gaps on its own.
         Appending known synonyms for each CUAD category makes BM25 find clauses
         that are legally equivalent but worded differently from the category name
         (e.g. "Expiration Date" query finds "terminate upon 90 days notice" text).
@@ -507,7 +521,7 @@ class RAGChain:
         if contract_name:
             key = re.sub(r"[\s\-_.]", "", contract_name).lower()
             # Word-level fallback: significant words (5+ chars, non-generic) that
-            # must all appear in the source — handles human-readable names like
+            # must all appear in the source - handles human-readable names like
             # "Antares Pharma, Inc. - Manufacturing Agreement" where the CUAD
             # filename has dates/numbers between the words.
             _GENERIC = {"agreement", "contract", "amendment", "exhibit", "annex"}
@@ -527,16 +541,22 @@ class RAGChain:
                 return False
 
             # Header categories (Document Name, Parties, Agreement Date, etc.)
-            # are always at the top of the contract — skip vector search entirely
-            # and load directly from the filesystem for speed and reliability.
-            q_lower = original_question.lower()
-            is_header_category = any(
-                cat in q_lower for cat in self._TOP_OF_DOC_CATEGORIES
-            )
+            # are always at the top of the contract, so skip vector search
+            # entirely and load directly from the filesystem for speed and
+            # reliability. Match the extracted CUAD category exactly rather than
+            # testing whether any header word appears anywhere in the question,
+            # which would misroute "Expiration Date" (contains "date") to the
+            # top-of-document loader and miss the termination clause deeper in
+            # the contract.
+
+            m_cat = self._CUAD_RE.search(original_question)
+            category = m_cat.group(1).strip().lower() if m_cat else ""
+            is_header_category = category in self._TOP_OF_DOC_CATEGORIES
             if is_header_category:
                 docs = self._load_from_filesystem(contract_name, k)
                 if docs:
                     return docs
+
 
             # Semantic search over a large global pool, then filter to this contract
             vectorstore = self.retriever.vectorstore
@@ -545,75 +565,97 @@ class RAGChain:
                 if _matches(d)
             ]
 
-            # Contract-specific BM25: only run when semantic search returned too
-            # few results — avoids the expensive vectorstore.get() on easy queries.
+            # Contract-scoped BM25 - always run so the legal-synonym keyword bridge
+            # fires even when semantic search already returned k chunks. This is
+            # what catches clauses worded differently from the category name
+            # (e.g. an "Expiration Date" query finding "shall terminate upon 90
+            # days notice"). The full-document scan is cached in _get_all_docs so
+            # the cost is paid once per chain, not once per query.
             bm25_hits = []
-            if len(semantic) < k:
-                try:
-                    from langchain_community.retrievers import BM25Retriever
-                    from langchain_core.documents import Document as LCDocument
-                    _BATCH = 5_000
-                    _texts, _metas = [], []
-                    _offset = 0
-                    while True:
-                        _batch = vectorstore.get(
-                            include=["documents", "metadatas"],
-                            limit=_BATCH,
-                            offset=_offset,
-                        )
-                        if not _batch["documents"]:
-                            break
-                        _texts.extend(_batch["documents"])
-                        _metas.extend(_batch["metadatas"])
-                        _offset += len(_batch["documents"])
-                        if len(_batch["documents"]) < _BATCH:
-                            break
-                    contract_docs = [
-                        LCDocument(page_content=text, metadata=meta or {})
-                        for text, meta in zip(_texts, _metas)
-                        if _matches(LCDocument(page_content="", metadata=meta or {}))
-                    ]
-                    if contract_docs:
-                        local_bm25 = BM25Retriever.from_documents(contract_docs)
-                        local_bm25.k = k * 2
-                        bm25_hits = local_bm25.invoke(bm25_query)
-                except Exception:
-                    pass
+            try:
+                from langchain_community.retrievers import BM25Retriever
+                contract_docs = [d for d in self._get_all_docs() if _matches(d)]
+                if contract_docs:
+                    local_bm25 = BM25Retriever.from_documents(contract_docs)
+                    local_bm25.k = min(k * 2, len(contract_docs))
+                    bm25_hits = local_bm25.invoke(bm25_query)
+            except Exception:
+                pass
 
-            prefix = []
-
-            # Merge: prefix → semantic → bm25, deduplicated up to k
-            seen = set()
-            merged = []
-            for doc in prefix + semantic + bm25_hits:
-                sig = doc.page_content[:80]
-                if sig not in seen:
-                    seen.add(sig)
-                    merged.append(doc)
-                if len(merged) >= k:
-                    break
-
+            # Interleave semantic and BM25 so both retrievers contribute to the
+            # final k, deduplicated.
+            merged = self._interleave(semantic, bm25_hits, k)
             if merged:
                 return merged
 
             # Last resort: filesystem read (covers contracts not yet in ChromaDB)
             return self._load_from_filesystem(contract_name, k)
 
-        # No contract name detected — combine semantic + BM25 fallback
+        # No contract name detected - combine semantic + BM25 in parallel
         semantic_docs = self.retriever.invoke(retrieval_query)
         if self.bm25_retriever is None:
             return semantic_docs
 
         bm25_docs = self.bm25_retriever.invoke(bm25_query)
+        return self._interleave(semantic_docs, bm25_docs, k)
+
+    def _get_all_docs(self) -> list:
+        """
+        Return every chunk in this chain's vector store as LangChain Documents.
+
+        Pulled once and cached on the instance. Used to build a contract-scoped
+        BM25 index without re-scanning ChromaDB on every query. Fetched in
+        batches because SQLite (ChromaDB's backend) caps SQL variables per query.
+        """
+        if self._all_docs_cache is not None:
+            return self._all_docs_cache
+
+        from langchain_core.documents import Document as LCDocument
+        vectorstore = self.retriever.vectorstore
+        BATCH = 5_000
+        texts, metas = [], []
+        offset = 0
+        while True:
+            batch = vectorstore.get(
+                include=["documents", "metadatas"],
+                limit=BATCH,
+                offset=offset,
+            )
+            if not batch["documents"]:
+                break
+            texts.extend(batch["documents"])
+            metas.extend(batch["metadatas"])
+            offset += len(batch["documents"])
+            if len(batch["documents"]) < BATCH:
+                break
+
+        self._all_docs_cache = [
+            LCDocument(page_content=t, metadata=m or {})
+            for t, m in zip(texts, metas)
+        ]
+        return self._all_docs_cache
+
+    @staticmethod
+    def _interleave(primary: list, secondary: list, k: int) -> list:
+        """
+        Merge two ranked lists by alternating between them, deduplicating on the
+        first 80 characters of each chunk, and trimming to k results. The primary
+        list (semantic search) is given the first slot at each round.
+        """
+        from itertools import zip_longest
         seen = set()
         merged = []
-        for doc in semantic_docs + bm25_docs:
-            sig = doc.page_content[:80]
-            if sig not in seen:
+        for a, b in zip_longest(primary, secondary):
+            for doc in (a, b):
+                if doc is None:
+                    continue
+                sig = doc.page_content[:80]
+                if sig in seen:
+                    continue
                 seen.add(sig)
                 merged.append(doc)
-            if len(merged) >= k:
-                break
+                if len(merged) >= k:
+                    return merged
         return merged
 
     def _load_from_filesystem(self, contract_name: str, k: int) -> list:
@@ -659,12 +701,12 @@ class RAGChain:
         Extract a CUAD contract filename from a question.
 
         Handles two CUAD formats:
-          1. Quoted   — "LIMEENERGYCO_09_09_1999-EX-10-DISTRIBUTOR AGREEMENT"
-          2. Unquoted — BNCMORTGAGEINC_05_17_1999-EX-10.4-LICENSING AND WEB
+          1. Quoted   - "LIMEENERGYCO_09_09_1999-EX-10-DISTRIBUTOR AGREEMENT"
+          2. Unquoted - BNCMORTGAGEINC_05_17_1999-EX-10.4-LICENSING AND WEB
                         SITE HOSTING AGREEMENT__Document Name
         All CUAD filenames contain -EX- and end with AGREEMENT or CONTRACT.
         """
-        # Format 1: inside double or single quotes — handles both _EX- and -EX- separators
+        # Format 1: inside double or single quotes - handles both _EX- and -EX- separators
         match = re.search(
             r'["\']([^"\']*[_\-]EX-[^"\']*?(?:AGREEMENT|CONTRACT))[^"\']*["\']',
             question, re.IGNORECASE
@@ -685,7 +727,7 @@ class RAGChain:
         # Format 3: human-readable name ending with Agreement/Contract, either
         # at the start of the question (evaluate.py injection format) or after
         # "this contract" (UI format).
-        # e.g. "Antares Pharma, Inc. - Manufacturing Agreement" — Highlight...
+        # e.g. "Antares Pharma, Inc. - Manufacturing Agreement" - Highlight...
         # e.g. ...this contract "Antares Pharma, Inc. - Manufacturing Agreement" related to...
         match = re.search(
             r'(?:^|contract\s+)"([^"]{4,}?(?:Agreement|Contract)s?)"',
@@ -699,7 +741,7 @@ class RAGChain:
     def _condense_question(self, question: str, chat_history: str) -> str:
         """Reformulate a follow-up question into a standalone retrieval query."""
         if not chat_history:
-            return question  # First turn — no history to resolve
+            return question  # First turn - no history to resolve
 
         condense_chain = CONDENSE_PROMPT | self.llm | self._parser
         return condense_chain.invoke({
@@ -804,7 +846,7 @@ def build_rag_chain(
 
 
 if __name__ == "__main__":
-    # End-to-end smoke test — requires GPU and HF_TOKEN in .env
+    # End-to-end smoke test - requires GPU and HF_TOKEN in .env
     print("Building RAG chain for smoke test...")
     chain = build_rag_chain(
         chunking_strategy="recursive",
@@ -817,7 +859,7 @@ if __name__ == "__main__":
     questions = [
         "What is the governing law of this contract?",
         "Does it have a non-compete clause?",
-        "What about the termination conditions?",  # tests memory — uses "What about"
+        "What about the termination conditions?",  # tests memory - uses "What about"
     ]
 
     for q in questions:
