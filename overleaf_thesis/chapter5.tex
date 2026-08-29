@@ -48,7 +48,7 @@ Full contracts can run to hundreds of pages, but language models have fixed cont
 \textbf{Fixed-size chunking} first splits the text at paragraph boundaries (double-newline separators), then groups adjacent paragraphs into chunks of up to 1{,}000 characters with a 200-character overlap between consecutive chunks. The overlap ensures that text near a boundary appears in both adjacent segments, reducing the chance that a relevant clause is cut in half. Paragraphs that on their own exceed the target size are split at an arbitrary character position. The method is fast to compute and exploits only the coarse cue of paragraph breaks, leaving sentence and clause boundaries unrespected.
 
 
-\textbf{Recursive character chunking} uses the same 1{,}000-character target and 200-character overlap, but tries to cut at natural boundaries before resorting to arbitrary splits: it attempts paragraph breaks first, then single newlines, then sentence boundaries, and only splits mid-text when a segment still exceeds the target size. This produces more coherent chunks than fixed-size splitting wherever the document structure allows.
+\textbf{Recursive character chunking} uses the same 1{,}000-character target and 200-character overlap, but tries to cut at natural boundaries before resorting to arbitrary splits: it attempts paragraph breaks first, then single newlines, then spaces, and only splits mid-text when a segment still exceeds the target size. This produces more coherent chunks than fixed-size splitting wherever the document structure allows.
 
 \textbf{Semantic chunking} does not use a fixed size target. The embedding model computes the similarity between each pair of adjacent sentences, and a chunk boundary is placed wherever this similarity drops sharply, indicating a topic shift. The resulting chunks group sentences that discuss the same subject, so chunk sizes vary with the content of each contract section. This requires embedding every sentence before indexing, which makes it slower than the other two methods, but it can produce cleaner boundaries in legal text where topically related clauses are separated by formulaic boilerplate. The implementation uses LangChain's \texttt{SemanticChunker} with the default percentile breakpoint method: a boundary is placed wherever the cosine distance between two adjacent sentence embeddings exceeds the 95th percentile of all such distances measured within the document.
 
@@ -66,11 +66,13 @@ to the pipeline.
 
 This section describes how the system selects the passages passed to the language model. Retrieval combines dense semantic search with BM25 keyword matching, adds contract-specific routing so that each query is scoped to the named contract, and reformulates follow-up questions before searching.
 
-
 \subsection{Dense Semantic Search}
-The primary retrieval method is Maximal Marginal Relevance (MMR) search over the ChromaDB index. For each query, MMR first retrieves a candidate pool of four times the number of chunks requested, which gives 40 candidates for $k = 10$, and then selects the final 10 by balancing similarity to the query against diversity among the selected passages. The balance parameter is set to 0.7, weighting the selection toward relevance while still enforcing diversity. The number of retrieved chunks $k$ is configurable from the Streamlit interface. $k=10$ was used for all six configurations in the automated evaluation.|
+The dense side of retrieval queries the ChromaDB index built for the active chunking strategy. The retrieval query, stripped of the CUAD boilerplate, is embedded with the same all-MiniLM-L6-v2 model used at indexing time, and the index returns the chunks whose embeddings are closest to the query in cosine similarity.
 
-MMR was chosen because a single contract is internally repetitive: boilerplate definitions, recurring cross-references, and the same phrasing reused across clauses mean that plain similarity search often returns several near-duplicate passages from the very same contract, wasting slots in the fixed retrieval budget on redundant text. The diversity penalty spreads the retrieved passages across different parts of the contract, giving the model broader coverage of the relevant clause and its surrounding context rather than repeated copies of the single strongest match. MMR is used as the retrieval method for all six experimental configurations.
+Because every question is scoped to a single named contract, the search is run over a large candidate pool and then filtered to that contract. For each query the index returns a pool of $k \times 10$ chunks, which are filtered to the chunks whose source path matches the named contract. The pool has to be large because the filter discards everything belonging to the other 509 contracts, and a smaller pool would frequently leave too few chunks from the target contract to fill the retrieval budget. With $k = 10$, 100 candidates are scored before filtering. The number of retrieved chunks $k$ is configurable from the Streamlit interface, and $k = 10$ was used for all six configurations in the automated evaluation.
+
+Scoping the search to one contract also removes the main reason a diversity-aware reranker would otherwise be needed. A single contract repeats boilerplate definitions and recurring cross-references, so a plain similarity search can return several near-duplicate passages. The contract-scoped pool combined with the keyword retriever described next, and the deduplication applied when the two result lists are merged, spread the final selection across different parts of the contract rather than returning repeated copies of the single strongest match.
+
 
 \subsection{BM25 Keyword Retrieval and Hybrid Merging}
 
@@ -81,19 +83,10 @@ duplicates removed, and trimmed to the target of 10 passages.
 
 \subsection{Contract-Specific Retrieval}
 
-CUAD evaluation questions always refer to a specific named contract. The system
-detects the contract name from the question, either from a quoted filename or from
-a human-readable title enclosed in quotes, and filters the semantic search results
-to passages whose source path matches that contract. If too few results survive the
-filter, a BM25 search is run over only that contract's passages to fill the remaining
-slots.
+CUAD evaluation questions always refer to a specific named contract. The system detects the contract name from the question, either from a quoted filename or from a human-readable title enclosed in quotes, and filters the semantic search results to passages whose source path matches that contract. A BM25 index is then built over that contract's passages alone and queried with the synonym-expanded query, so both retrievers contribute on every contract-scoped question rather than BM25 acting only as a fallback.
 
-For clause categories that always appear near the top of a contract, such as the
-document title, the names of the parties, and the agreement date, vector search is
-bypassed entirely. The first few passages of the matching file are read directly from
-disk. Vector search is unreliable for these categories because the relevant text
-typically consists of proper nouns and formatting rather than semantically meaningful
-prose.
+
+For clause categories that always appear near the top of a contract, such as the document title, the names of the parties, and the agreement date, vector search is bypassed entirely. The first few passages of the matching file are read directly from disk. Vector search is unreliable for these categories because the relevant text typically consists of proper nouns and formatting rather than semantically meaningful prose.
 
 \subsection{Query Reformulation}
 

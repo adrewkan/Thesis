@@ -1,7 +1,7 @@
 \chapter{The Interactive Application}
 \label{chap_app}
 
-This chapter presents the interactive application built on top of the RAG pipeline, which is the primary user-facing deliverable of the thesis. It first describes the web interface and how a user configures and converses with the system, then introduces the two conversational memory strategies the application offers, and finally uses the application to compare those two strategies in a multi-turn setting that the automated evaluation of Chapter~\ref{chap6} could not distinguish.
+This chapter presents the interactive application built on top of the RAG pipeline, which is the primary user-facing deliverable of the thesis. It first describes the web interface and how a user configures and converses with the system, then introduces the two conversational memory strategies the application offers, and finally uses the application to compare those two strategies in a multi-turn setting that the automated evaluation of Chapter~\ref{chap6} could not distinguish. The complete source code for the application is available at \url{https://github.com/adrewkan/Thesis}.
 
 \section{Web Interface}
 
@@ -16,7 +16,7 @@ The web app UI is visible in Figure ~\ref{fig:app} below. A sidebar holds the co
     \label{fig:app}
 \end{figure}
 
-The main area is the chat itself. Each user question is answered by the pipeline, and the answer is grounded exclusively in the retrieved contract excerpts. Two details of the pipeline are surfaced in the interface to make its behaviour transparent. First, when conversational memory rewrites a follow-up question into a standalone retrieval query, that reformulated query is shown above the answer, so the effect of the question-condensation step is visible. Second, each answer carries an expandable source-documents panel that lists the retrieved chunks with their source filenames, allowing the user to trace the answer back to the specific contract passages it was drawn from. These two details are visible in Figure~\ref{fig:memory1}.
+The main area is the chat itself. Each user question is answered by the pipeline, and the answer is grounded exclusively in the retrieved contract excerpts. Two details of the pipeline are surfaced in the interface to make its behaviour transparent. First, when conversational memory rewrites a follow-up question into a standalone retrieval query, that reformulated query is shown above the answer, so the effect of the question-condensation step is visible. Second, each answer carries an expandable source-documents panel that lists the retrieved chunks with their source filenames, allowing the user to trace the answer back to the specific contract passages it was drawn from. Both appear in the multi-turn session screenshots shown later in this chapter.
 
 \section{Conversational Memory}
 
@@ -78,7 +78,7 @@ The failure appeared at question 7 (Figure~\ref{fig:memory3}). At that point the
 \newpage
 \subsection{Summary Memory Results}
 
-Under summary memory, the LLM maintains a running compressed summary of the full conversation after each turn. After question 1, the summary includes the fact that the user asked about the contracting parties and that the answer was GROUPE PARAMEUS CORP and Sphere 3D Corp. This summary is never truncated, it is updated incrementally and passed in full on every subsequent turn. When question 7 was asked under summary memory, the model correctly identified question 1 as the parties question and reproduced the correct answer, demonstrating that the information survived across all seven turns.
+Under summary memory, the LLM maintains a running compressed summary of the full conversation after each turn. After question 1, the summary includes the fact that the user asked about the contracting parties and that the answer was GROUPE PARAMEUS CORP and Sphere 3D Corp. This summary is never truncated, it is updated incrementally and passed in full on every subsequent turn. When question 7 was asked under summary memory, the model correctly identified question 1 as the parties question and reproduced the correct answer, demonstrating that the information survived across all seven turns. This session is shown in Figures~\ref{fig:summary1} to~\ref{fig:summary3}.
 
 \begin{figure}[h!]
     \centering

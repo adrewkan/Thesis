@@ -1,11 +1,9 @@
 % Αγγλική Περίληψη
 
 \begin{abstracteng}\setlanguage{american}
-The abstract includes the scientific area and the purpose - subject of the thesis, the methodology, the main steps followed and the main results obtained. The total extent of the abstract will be up to one page.
-
-A thesis written in english should include an english and a greek abstract.
+Legal contract review requires locating specific clauses across long documents written in formal, technical language, which makes the task slow and expensive for legal teams. Large language models can answer questions over text, but they cannot answer questions about a specific contract they never saw during training, and they tend to produce confident answers that no source supports. This thesis builds and evaluates a conversational question answering system for commercial contracts based on Retrieval-Augmented Generation (RAG). The system retrieves relevant passages from a contract and passes them to the language model as context, so that every answer can be traced back to the text it was drawn from. It is delivered as an interactive web application and runs entirely on a single consumer GPU, using two local models, Llama 3.1 8B and Mistral 7B, under 4-bit quantization. Retrieval combines dense semantic search with BM25 keyword matching and scopes each query to the named contract, and the system supports three chunking strategies and two conversational memory strategies. Using the CUAD dataset of 510 annotated contracts, six configurations were evaluated with four RAGAS metrics, two LLM-as-a-judge metrics, and a no-retrieval baseline. Retrieval raised answer correctness from 0.36 to 0.77 for the stronger model, and recursive or semantic chunking with Llama 3.1 8B produced the most accurate answers.
 
 \vspace*{\fill}
 \noindent{\large\bf{Keywords:}}\\ 
-term, term, $\dots$, term
+Retrieval-Augmented Generation, Large Language Models, Legal Contract Review, Question Answering, CUAD, Hybrid Retrieval, RAGAS Evaluation
 \end{abstracteng}

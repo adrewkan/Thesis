@@ -42,10 +42,6 @@ Semantic  & Mistral 7B   & 0.91 & \textbf{0.96} & 0.77 & \textbf{0.71} & 0.63 & 
 \label{tab:results}
 \end{table}
 
-
-The subsections that follow read this table one dimension at a time: first the
-retrieval metrics, then the generation metrics, and finally the cost measures of latency and token consumption.
-
 The subsections that follow read this table one dimension at a time: first the retrieval metrics, then the generation metrics, then the separate effects of the chunking strategy and the language model, and finally the cost measures of latency and token consumption. The final subsection describes the recurring answer patterns behind these scores, which the metrics on their own do not reveal. Each subsection reproduces the columns of Table~\ref{tab:results} that it discusses, so that the relevant figures sit beside the text interpreting them. These smaller tables report no new measurements. Every value in them is taken directly from Table~\ref{tab:results}.
 
 \subsection{Retrieval Quality}
@@ -68,7 +64,7 @@ Semantic  & Mistral 7B   & 0.91 & \textbf{0.96} \\
 \label{tab:excerpt-retrieval}
 \end{table}
 
-Context Precision and Context Recall are high and stable across all six configurations. Precision ranges from 0.91 to 0.95 and recall from 0.87 to 0.96, a spread of well under 0.1 in both cases. This reflects the fact that all configurations share the same retrieval mechanism: hybrid MMR and BM25 with legal synonym expansion over the same document corpus, scoped to the named contract. The model choice has no effect on what gets retrieved, since retrieval runs before the language model is invoked, and switching chunking strategy changes chunk boundaries rather than the retrieval logic. The consistently high precision and recall confirm that the relevant clause is almost always present in the retrieved context. Where the system falls short, the cause lies in generation rather than retrieval.
+Context Precision and Context Recall are high and stable across all six configurations. Precision ranges from 0.91 to 0.95 and recall from 0.87 to 0.96, a spread of well under 0.1 in both cases. This reflects the fact that all configurations share the same retrieval mechanism: contract-scoped dense similarity search combined with BM25 and legal synonym expansion over the same document corpus. The model choice has no effect on what gets retrieved, since retrieval runs before the language model is invoked, and switching chunking strategy changes chunk boundaries rather than the retrieval logic. The consistently high precision and recall confirm that the relevant clause is almost always present in the retrieved context. Where the system falls short, the cause lies in generation rather than retrieval.
 
 
 \subsection{Generation Quality}

@@ -51,7 +51,7 @@ in contracts uses varied legal phrasing: a contract may express expiration as
 \textit{``shall terminate upon 90 days written notice''}, or state the governing law
 as \textit{``construed in accordance with the laws of the State of Delaware''}. These
 pairs are legally equivalent but semantically distant in embedding space, so a
-semantic-only retriever can miss the relevant clause even when it is present.This motivated the addition of hybrid retrieval, in which a BM25 keyword index runs alongside the dense retriever and its queries are expanded with legal synonyms for each clause category. Both are described in detail in Chapter~\ref{chap5}.
+semantic-only retriever can miss the relevant clause even when it is present. This motivated the addition of hybrid retrieval, in which a BM25 keyword index runs alongside the dense retriever and its queries are expanded with legal synonyms for each clause category. Both are described in detail in Chapter~\ref{chap5}.
 
 
 \textbf{Structured data and annotation quirks.}
@@ -92,9 +92,9 @@ directly comparable.
 \subsection{Hugging Face Transformers and bitsandbytes}
 
 The Hugging Face Transformers library \cite{wolf2020transformers} was used to load
-Llama~3.1~8B Instruct and Mistral~7B Instruct locally from the Hugging Face Hub.
+Llama~3.1~8B Instruct and Mistral~7B Instruct v0.3 locally from the Hugging Face Hub.
 Both models were loaded with 4-bit NF4 quantization via bitsandbytes
-\cite{dettmers2022qlora}, reducing memory consumption from approximately 16\,GB in half precision
+\cite{dettmers2023qlora}, reducing memory consumption from approximately 16\,GB in half precision
 to roughly 5\,GB per model with minimal quality loss on extractive tasks. Model
 weights are distributed across the available GPU automatically. Each model is
 subsequently wrapped so that the tokenizer's native chat template is applied
