@@ -254,19 +254,31 @@ with st.sidebar:
 # ------------------------------------------------------------------ #
 
 st.title("⚖️ Legal RAG Assistant")
-st.caption(
+st.markdown(
+    "<p style='font-size:1.25rem; color:#9aa0a6; margin-top:-0.25rem;'>"
     "Ask questions about the 510 CUAD commercial contracts. "
     "Answers are grounded exclusively in the retrieved contract excerpts."
+    "</p>",
+    unsafe_allow_html=True,
 )
 
 if not st.session_state.chain:
-    st.info(
-        "**Getting started**\n\n"
-        "1. Pick a configuration in the sidebar.\n"
-        "2. Click **🚀 Load Chain** (the first load downloads the model,"
-        " subsequent loads are instant).\n"
-        "3. Ask questions about the contracts below.",
-        icon="👈",
+    st.markdown(
+        """
+        <div style="background-color: rgba(28,131,225,0.10); border-radius: 0.5rem;
+                    padding: 1rem 1.25rem; line-height: 1.6;">
+          <div style="font-size: 1.5rem; font-weight: 700; margin-bottom: 0.4rem;">
+            👈 Getting started
+          </div>
+          <ol style="font-size: 1.25rem; margin: 0 0 0 1.4rem; padding: 0;">
+            <li>Pick a configuration in the sidebar.</li>
+            <li>Click 🚀 <strong>Load Chain</strong> (the first load downloads the
+                model, subsequent loads are instant).</li>
+            <li>Ask questions about the contracts below.</li>
+          </ol>
+        </div>
+        """,
+        unsafe_allow_html=True,
     )
     st.stop()
 

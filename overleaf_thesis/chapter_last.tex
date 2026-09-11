@@ -30,15 +30,6 @@ Taken together, the results support the approach set out in the introduction. Re
 Several directions follow from the limitations above. The most pressing is the latency of semantic chunking with Llama. A re-ranking step placed after hybrid retrieval would let the system pull a larger candidate pool and then pass only the few most relevant passages to the model. This would
 raise Context Precision and at the same time cut the input length that drives generation time. A cross-encoder re-ranker is the usual choice and would fit between the existing retrieval and generation stages without other changes to the pipeline.
 
-%The evaluation could be made more reliable. Twenty questions is a small sample,
-%and the sampling effect already visible in the one low Context Recall score
-%shows its sensitivity. A larger sample drawn across more contracts, with results
-%reported alongside confidence intervals, would make the differences between
-%configurations more trustworthy. The Answer Relevancy mismatch could be handled
-%by rewriting the CUAD review instructions into natural questions before scoring,
-%so that the metric reflects the quality of the answer rather than the phrasing
-%of the dataset template.
-
 The retrieval stage could be adapted to the legal domain. The current system
 embeds contracts with a general-purpose sentence encoder. A domain-adapted
 embedding model such as LEGAL-BERT, discussed in Chapter~\ref{chap2}, may close

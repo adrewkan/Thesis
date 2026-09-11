@@ -209,7 +209,7 @@ the score and a one-sentence justification. The correctness and conciseness scor
 \newpage
 \subsection{No-Retrieval Baseline}
 
-To measure the contribution of retrieval, each language model is also run without any retrieved context on the same twenty questions. The model receives only the question and a brief instruction to answer from general legal knowledge or to respond with \textit{``Not found''} if the answer requires reading the specific contract. Since there is no retrieved context, RAGAS metrics are not applicable to the baseline. Correctness and conciseness are scored by LLM-as-a-Judge, allowing a direct comparison of judge correctness between the RAG configurations and the no-retrieval baseline for each language model. This comparison quantifies how much retrieval contributes to answer quality over what the model already knows from training. The baseline prompt is shown in Figure~\ref{fig:baseline_prompt}.
+To measure the contribution of retrieval, each language model is also run without any retrieved context on the same twenty questions. The model receives only the question and a brief instruction to answer from general legal knowledge or to respond with \textit{``Not found''} if it does not know the answer. Since there is no retrieved context, RAGAS metrics are not applicable to the baseline. Correctness and conciseness are scored by LLM-as-a-Judge, allowing a direct comparison of judge correctness between the RAG configurations and the no-retrieval baseline for each language model. This comparison quantifies how much retrieval contributes to answer quality over what the model already knows from training. The baseline prompt is shown in Figure~\ref{fig:baseline_prompt}.
 
 \begin{figure}[h!]
     \centering

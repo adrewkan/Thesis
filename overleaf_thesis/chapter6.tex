@@ -5,7 +5,7 @@ This chapter presents the results of the automated evaluation across all six con
 
 \section{Evaluation Setup}
 
-All six configurations were evaluated using GPT-4o-mini as the external judge for both RAGAS metrics and the LLM-as-a-Judge scores. Each configuration was run on the same stratified 20-question sample described in Section~\ref{sec:eval-sampling}. Fourteen of the twenty questions were answerable (is\_impossible=False) and six were unanswerable. RAGAS metrics were computed only on the answerable subset. Judge Correctness was also restricted to answerable questions. Judge Conciseness was computed for all non-error answers. Results for each question were written to a timestamped CSV file and averaged per configuration. The six unanswerable questions were evaluated manually: for each one, the model's response was inspected to determine whether it correctly acknowledged that the requested information was not present in the contract. A response was counted as correct if it explicitly stated that the answer could not be found, without fabricating a plausible-sounding but unsupported answer. The retriever was configured with $k=10$ chunks per query for all runs. Each configuration was evaluated independently, with no shared conversation history between questions.
+All six configurations were evaluated using GPT-4o-mini as the external judge for both RAGAS metrics and the LLM-as-a-Judge scores. Each configuration was run on the same stratified 20-question sample described in Section~\ref{sec:eval-sampling}. Fourteen of the twenty questions were answerable (is\_impossible=False) and six were unanswerable. RAGAS metrics were computed only on the answerable subset. Judge Correctness was also restricted to answerable questions. Judge Conciseness was computed for all non-error answers. Results for each question were written to a timestamped CSV file and averaged per configuration. The six unanswerable questions were evaluated manually: for each one, the model's response was inspected to determine whether it correctly acknowledged that the requested information was not present in the contract. A response was counted as correct if it ultimately acknowledged that the requested clause was not present, even if it first discussed related material, without fabricating a specific answer. The retriever was configured with $k=10$ chunks per query for all runs. Each configuration was evaluated independently, with no shared conversation history between questions.
 
 
 \section{Results Overview}
@@ -276,13 +276,13 @@ literature: its model-comparison trends match those of ContractEval and its fait
 
 \section{No-Retrieval Baseline}
 
-To quantify the contribution of the retrieval component, both language models were run on the same 20-question sample with no retrieved context. The baseline prompt instructs the model to answer the question from its general legal knowledge alone, or to respond with \textit{``Not found"} if the answer requires reading the specific contract. RAGAS metrics are not applicable in this setting, so the comparison rests on Judge Correctness, Judge Conciseness, and latency.
+To quantify the contribution of the retrieval component, both language models were run on the same 20-question sample with no retrieved context. The baseline prompt instructs the model to answer the question from its general legal knowledge alone, or to respond with \textit{``Not found"} if it does not know the answer. RAGAS metrics are not applicable in this setting, so the comparison rests on Judge Correctness, Judge Conciseness, and latency.
 
 Table~\ref{tab:baseline} reports the baseline scores alongside the per-model average across the three RAG configurations.
 
 \begin{table}[ht]
 \centering
-\begin{tabular}{lcccc}
+\begin{tabular}{lccc}
 \toprule
 \textbf{Model} & \textbf{Judge Correctness} & \textbf{Judge Conciseness} & \textbf{Latency (s)} \\
 \midrule

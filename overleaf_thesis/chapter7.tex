@@ -39,7 +39,7 @@ Summary memory replaces the full conversation history with a compressed version 
 
 
 \section{Memory Strategy Comparison}
-The automated evaluation runs each question in isolation, resetting conversation history before each turn. Both windowed and summary memory are therefore equivalent in that setting. To compare the two strategies in a realistic multi-turn scenario, a fixed sequence of seven questions was run manually through the Streamlit interface, using Llama 3.1 8B as the generator for both the answers and the running summary. Six questions drawn from the CUAD annotations for a random contract that was chosen of the 510 contracts (Sphere 3D Corp consulting agreement), plus one question that references information from a turn before the memory context window.
+The automated evaluation runs each question in isolation, resetting conversation history before each turn. Both windowed and summary memory are therefore equivalent in that setting. To compare the two strategies in a realistic multi-turn scenario, a fixed sequence of seven questions was run manually through the Streamlit interface, using Llama 3.1 8B as the generator for both the answers and the running summary. The sequence used six questions drawn from the CUAD annotations for a randomly chosen contract (the Sphere 3D Corp consulting agreement), plus one question that references information from a turn before the memory window.
 
 \subsection{Question Sequence}
 

@@ -492,12 +492,54 @@ class RAGChain:
         base = RAGChain._build_retrieval_query(question)
         m = RAGChain._CUAD_RE.search(question)
         if not m:
+            # Natural-language question (no CUAD boilerplate). Still try to map
+            # it to a CUAD category so the synonym bridge also fires in the app.
+            # This branch is never taken by the CUAD-format evaluation questions,
+            # so the reported metrics are unaffected.
+            nat_category = RAGChain._match_natural_category(question)
+            if nat_category:
+                nat_syns = RAGChain._CUAD_SYNONYMS.get(nat_category, "")
+                if nat_syns:
+                    return f"{base} {nat_syns}"
             return base
         category = m.group(1).strip()
         synonyms = RAGChain._CUAD_SYNONYMS.get(category, "")
         if synonyms:
             return f"{base} {synonyms}"
         return base
+
+    @staticmethod
+    def _match_natural_category(question: str) -> str | None:
+        """
+        Best-effort mapping of a free-form (non-CUAD) question to a CUAD
+        category, so the BM25 legal-synonym expansion can also fire on
+        natural-language questions typed into the app.
+
+        Each category is scored by how many of its name words and synonym
+        terms appear in the question; multi-word or longer (>= 7 char) terms
+        count double because they are more distinctive. Very short connective
+        words are ignored. A category is returned only when its score reaches
+        2, so a single generic word (e.g. "law") cannot trigger a match on its
+        own. Returns None when nothing matches confidently.
+
+        Only reached for questions that do NOT match the CUAD boilerplate, so
+        it never affects the automated evaluation.
+        """
+        stop = {"of", "the", "to", "a", "an", "and", "or", "for",
+                "in", "on", "at", "by", "no", "not"}
+        q = question.lower()
+        best_category, best_score = None, 0
+        for category, syns in RAGChain._CUAD_SYNONYMS.items():
+            terms = [category.lower()] + [
+                t for t in syns.lower().split() if t not in stop
+            ]
+            score = 0
+            for term in terms:
+                if re.search(rf"\b{re.escape(term)}\b", q):
+                    score += 2 if (" " in term or len(term) >= 7) else 1
+            if score > best_score:
+                best_score, best_category = score, category
+        return best_category if best_score >= 2 else None
 
     def _retrieve_docs(self, query: str, original_question: str) -> list:
         """
