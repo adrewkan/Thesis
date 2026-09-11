@@ -64,7 +64,8 @@ Semantic  & Mistral 7B   & 0.91 & \textbf{0.96} \\
 \label{tab:excerpt-retrieval}
 \end{table}
 
-Context Precision and Context Recall are high and stable across all six configurations. Precision ranges from 0.91 to 0.95 and recall from 0.87 to 0.96, a spread of well under 0.1 in both cases. This reflects the fact that all configurations share the same retrieval mechanism: contract-scoped dense similarity search combined with BM25 and legal synonym expansion over the same document corpus. The model choice has no effect on what gets retrieved, since retrieval runs before the language model is invoked, and switching chunking strategy changes chunk boundaries rather than the retrieval logic. The consistently high precision and recall confirm that the relevant clause is almost always present in the retrieved context. Where the system falls short, the cause lies in generation rather than retrieval.
+Context Precision and Context Recall are high and stable across all six configurations. Precision ranges from 0.91 to 0.95 and recall from 0.87 to 0.96, a spread of well under 0.1 in both cases. This reflects the fact that all configurations share the same retrieval mechanism: contract-scoped dense similarity search combined with BM25 and legal synonym expansion over the same document corpus. The model choice has no effect on what gets retrieved, since retrieval runs before the language model is invoked, and switching chunking strategy changes chunk boundaries rather than the retrieval logic. The consistently high precision and recall confirm that the relevant clause is almost always present in the retrieved context. Where the system falls short, the cause lies in generation rather than retrieval. This recall level also confirms that $k = 10$ was a satisfactory parameter: the relevant passage is almost always among the ten retrieved chunks, so a larger $k$ would have added little recall at a higher latency cost.
+
 
 
 \subsection{Generation Quality}
